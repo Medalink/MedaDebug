@@ -36,7 +36,7 @@ SystemMonitor.onStatsUpdated = nil
 function SystemMonitor:Enable()
     if self.isEnabled then return end
     self:Initialize()
-    MedaDebug:Log("MedaDebug", "System monitoring enabled", "INFO")
+    MedaDebug:LogInternal("MedaDebug", "System monitoring enabled", "INFO")
 end
 
 --- Disable system monitoring at runtime
@@ -44,7 +44,7 @@ function SystemMonitor:Disable()
     if not self.isEnabled then return end
     self.isEnabled = false
     self:StopUpdates()
-    MedaDebug:Log("MedaDebug", "System monitoring disabled", "INFO")
+    MedaDebug:LogInternal("MedaDebug", "System monitoring disabled", "INFO")
 end
 
 --- Check if enabled

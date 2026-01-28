@@ -197,16 +197,16 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 MedaDebug.DebugFrame:Initialize()
             end
             
-            -- Restore frame state if dev mode or was open
-            if MedaDebug.db.options.devMode or MedaDebug.db.frameState.isOpen then
-                if MedaDebug.DebugFrame and MedaDebug.DebugFrame.Show then
-                    MedaDebug.DebugFrame:Show()
+            -- Restore frame state if dev mode or was open (slight delay to ensure frame is ready)
+            C_Timer.After(0.05, function()
+                if (MedaDebug.db.options.devMode or MedaDebug.db.frameState.isOpen) and MedaDebug.DebugFrame.frame then
+                    MedaDebug.DebugFrame.frame:Show()
                 end
-            end
+            end)
             
             -- Log reload separator if this is a reload (not first login)
             if MedaDebug.log.session.reloadCount > 1 then
-                MedaDebug:Log("MedaDebug", "--- Reload #" .. MedaDebug.log.session.reloadCount .. " ---", "INFO")
+                MedaDebug:LogInternal("MedaDebug", "--- Reload #" .. MedaDebug.log.session.reloadCount .. " ---", "INFO")
             end
             
             -- Initialize minimap button
@@ -388,8 +388,8 @@ function MedaDebug:Debug(msg)
     end
 end
 
--- Log a message (internal shorthand)
-function MedaDebug:Log(addon, message, level)
+-- Log a message (internal shorthand - use LogInternal to avoid conflict with API:Log)
+function MedaDebug:LogInternal(addon, message, level)
     if self.API then
         self.API:Output(addon, message, level or "INFO")
     end

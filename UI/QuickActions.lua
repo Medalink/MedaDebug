@@ -56,10 +56,10 @@ function QuickActions:ExecuteAction(index)
         if func then
             local success, result = pcall(func)
             if not success then
-                MedaDebug:Log("MedaDebug", "Action error: " .. tostring(result), "ERROR")
+                MedaDebug:LogInternal("MedaDebug", "Action error: " .. tostring(result), "ERROR")
             end
         else
-            MedaDebug:Log("MedaDebug", "Action compile error: " .. tostring(err), "ERROR")
+            MedaDebug:LogInternal("MedaDebug", "Action compile error: " .. tostring(err), "ERROR")
         end
     end
 end

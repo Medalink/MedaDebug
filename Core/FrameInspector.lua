@@ -82,7 +82,7 @@ function FrameInspector:StartInspectMode()
     self.clickFrame:Show()
     SetCursor("CAST_CURSOR")
     
-    MedaDebug:Log("MedaDebug", "Inspect mode: Click a frame or press ESC to cancel", "INFO")
+    MedaDebug:LogInternal("MedaDebug", "Inspect mode: Click a frame or press ESC to cancel", "INFO")
 end
 
 --- Stop inspect mode

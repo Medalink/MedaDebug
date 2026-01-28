@@ -53,6 +53,37 @@ function DebugFrame:Initialize()
         end)
     end
     
+    -- Add settings button to title bar (white gear icon)
+    local settingsBtn = CreateFrame("Button", nil, self.frame.titleBar, "BackdropTemplate")
+    settingsBtn:SetSize(20, 20)
+    settingsBtn:SetPoint("RIGHT", self.frame.closeButton, "LEFT", -2, 0)
+    settingsBtn:SetBackdrop(MedaUI:CreateBackdrop(false))
+    settingsBtn:SetBackdropColor(0, 0, 0, 0)
+    
+    settingsBtn.icon = settingsBtn:CreateTexture(nil, "OVERLAY")
+    settingsBtn.icon:SetSize(16, 16)
+    settingsBtn.icon:SetPoint("CENTER")
+    settingsBtn.icon:SetTexture("Interface\\Buttons\\UI-OptionsButton")
+    settingsBtn.icon:SetVertexColor(1, 1, 1)  -- White
+    
+    settingsBtn:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(unpack(Theme.buttonHover))
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Settings")
+        GameTooltip:Show()
+    end)
+    
+    settingsBtn:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0, 0, 0, 0)
+        GameTooltip:Hide()
+    end)
+    
+    settingsBtn:SetScript("OnClick", function()
+        if MedaDebug.SettingsPanel then
+            MedaDebug.SettingsPanel:Toggle()
+        end
+    end)
+    
     -- Restore position
     local pos = frameState.position
     if pos and pos.point then
@@ -174,7 +205,7 @@ function DebugFrame:Initialize()
         collectgarbage("collect")
         local after = collectgarbage("count")
         local freed = before - after
-        MedaDebug:Log("MedaDebug", string.format("Garbage collected: %.1f KB freed", freed), "INFO")
+        MedaDebug:LogInternal("MedaDebug", string.format("Garbage collected: %.1f KB freed", freed), "INFO")
     end)
     
     -- Settings button (right side)
@@ -232,27 +263,42 @@ function DebugFrame:Initialize()
         if MedaDebug.db then
             MedaDebug.db.frameState.isOpen = true
         end
+        -- Refresh current tab when frame becomes visible
+        local currentTab = self.tabContents[self.activeTab]
+        if currentTab and currentTab.OnShow then
+            currentTab:OnShow()
+        end
     end)
     
     -- Connect to output manager for updates
     if MedaDebug.OutputManager then
         MedaDebug.OutputManager.onNewMessage = function(entry)
-            if self.tabContents.messages and self.tabContents.messages.OnNewMessage then
-                self.tabContents.messages:OnNewMessage(entry)
+            -- Refresh messages tab if it exists and is visible
+            if self.tabContents.messages then
+                if self.tabContents.messages.OnNewMessage then
+                    self.tabContents.messages:OnNewMessage(entry)
+                end
+            elseif self.activeTab == "messages" and self.frame:IsShown() then
+                -- Tab not initialized yet but should be visible - force refresh
+                C_Timer.After(0.1, function()
+                    if self.tabContents.messages and self.tabContents.messages.RefreshData then
+                        self.tabContents.messages:RefreshData()
+                    end
+                end)
             end
         end
     end
     
-    -- Connect to error handler
+    -- Connect to error handler (with pcall protection)
     if MedaDebug.ErrorHandler then
         MedaDebug.ErrorHandler.onNewError = function(entry)
-            self:UpdateErrorBadge()
+            pcall(function() self:UpdateErrorBadge() end)
             if self.tabContents.errors and self.tabContents.errors.OnNewError then
-                self.tabContents.errors:OnNewError(entry)
+                pcall(function() self.tabContents.errors:OnNewError(entry) end)
             end
         end
         MedaDebug.ErrorHandler.onErrorUpdated = function(entry)
-            self:UpdateErrorBadge()
+            pcall(function() self:UpdateErrorBadge() end)
         end
     end
 end

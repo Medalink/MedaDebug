@@ -44,7 +44,7 @@ local eventFrame = CreateFrame("Frame")
 function EventMonitor:Enable()
     if self.isEnabled then return end
     self:Initialize()
-    MedaDebug:Log("MedaDebug", "Event monitoring enabled", "INFO")
+    MedaDebug:LogInternal("MedaDebug", "Event monitoring enabled", "INFO")
 end
 
 --- Disable event monitoring at runtime
@@ -56,7 +56,7 @@ function EventMonitor:Disable()
     eventFrame:UnregisterAllEvents()
     wipe(self.watchedEvents)
     
-    MedaDebug:Log("MedaDebug", "Event monitoring disabled", "INFO")
+    MedaDebug:LogInternal("MedaDebug", "Event monitoring disabled", "INFO")
 end
 
 --- Check if enabled

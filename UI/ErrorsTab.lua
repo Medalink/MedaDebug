@@ -11,16 +11,15 @@ MedaDebug.ErrorsTab = ErrorsTab
 
 ErrorsTab.frame = nil
 ErrorsTab.scrollList = nil
-ErrorsTab.expandedErrors = {}
 ErrorsTab.selectedError = nil
 
 function ErrorsTab:Initialize(parent)
     self.frame = parent
     local Theme = MedaUI:GetTheme()
     
-    -- Create scroll list
+    -- Create scroll list with taller rows for expanded view
     self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight(), {
-        rowHeight = 50, -- Taller rows for error summary + hint
+        rowHeight = 50,
         renderRow = function(row, data, index)
             self:RenderRow(row, data, index)
         end,
@@ -36,106 +35,98 @@ function ErrorsTab:RenderRow(row, data, index)
     if not data then return end
     
     local Theme = MedaUI:GetTheme()
-    local isExpanded = self.expandedErrors[data.id]
+    
+    -- Ensure data has required structure (protect against corrupt saved data)
+    if not data.summary then
+        data.summary = {
+            type = "UNKNOWN",
+            sourceAddon = "Unknown",
+            sourceFile = "?",
+            sourceLine = 0,
+            hint = "No hint available",
+            shortMessage = "",
+        }
+    end
+    if not data.occurrences then
+        data.occurrences = { count = 1 }
+    end
+    if not data.raw then
+        data.raw = { message = "", stack = "", datetime = "" }
+    end
+    if not data.context then
+        data.context = { callChain = {} }
+    end
     
     -- Create elements if needed
-    if not row.icon then
-        row.icon = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        row.icon:SetPoint("TOPLEFT", 4, -4)
-        row.icon:SetText("[!]")
+    if not row.mainText then
+        row.mainText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.mainText:SetPoint("TOPLEFT", 8, -8)
+        row.mainText:SetPoint("TOPRIGHT", -120, -8)
+        row.mainText:SetJustifyH("LEFT")
+        row.mainText:SetWordWrap(false)
     end
     
-    if not row.addonLabel then
-        row.addonLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.addonLabel:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
+    if not row.hintText then
+        row.hintText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.hintText:SetPoint("TOPLEFT", 20, -26)
+        row.hintText:SetPoint("TOPRIGHT", -120, -26)
+        row.hintText:SetJustifyH("LEFT")
+        row.hintText:SetWordWrap(false)
     end
     
-    if not row.countLabel then
-        row.countLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.countLabel:SetPoint("RIGHT", -4, 8)
-    end
-    
-    if not row.summary then
-        row.summary = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.summary:SetPoint("TOPLEFT", 24, -4)
-        row.summary:SetPoint("RIGHT", row.countLabel, "LEFT", -8, 0)
-        row.summary:SetJustifyH("LEFT")
-        row.summary:SetWordWrap(false)
-    end
-    
-    if not row.hint then
-        row.hint = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.hint:SetPoint("TOPLEFT", 32, -22)
-        row.hint:SetPoint("RIGHT", -40, 0)
-        row.hint:SetJustifyH("LEFT")
-        row.hint:SetWordWrap(false)
-    end
-    
-    if not row.expandBtn then
-        row.expandBtn = CreateFrame("Button", nil, row)
-        row.expandBtn:SetSize(60, 16)
-        row.expandBtn:SetPoint("BOTTOMRIGHT", -4, 4)
-        row.expandBtn.text = row.expandBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.expandBtn.text:SetPoint("CENTER")
-        row.expandBtn.text:SetTextColor(unpack(Theme.textDim))
+    if not row.countText then
+        row.countText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.countText:SetPoint("TOPRIGHT", -60, -8)
     end
     
     if not row.copyBtn then
         row.copyBtn = CreateFrame("Button", nil, row)
-        row.copyBtn:SetSize(40, 16)
-        row.copyBtn:SetPoint("RIGHT", row.expandBtn, "LEFT", -4, 0)
+        row.copyBtn:SetSize(50, 18)
+        row.copyBtn:SetPoint("RIGHT", -8, 0)
         row.copyBtn.text = row.copyBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.copyBtn.text:SetPoint("CENTER")
         row.copyBtn.text:SetText("Copy")
-        row.copyBtn.text:SetTextColor(unpack(Theme.textDim))
     end
     
-    -- Set values
-    row.icon:SetTextColor(unpack(Theme.levelError))
+    -- Extract data
+    local summary = data.summary
+    local addonName = summary.sourceAddon or "Unknown"
+    local errorType = summary.type or "ERROR"
+    local sourceFile = summary.sourceFile or "?"
+    local sourceLine = summary.sourceLine or 0
+    local hint = summary.hint or "No hint available"
+    local count = (data.occurrences and data.occurrences.count) or 1
     
-    local summary = data.summary or {}
-    row.addonLabel:SetText(summary.sourceAddon or "Unknown")
-    row.addonLabel:SetTextColor(0.6, 0.8, 1)
+    -- Main line: [!] [Addon] TYPE in file:line
+    local mainLine = string.format("|cffff4444[!]|r |cff88bbff[%s]|r %s in %s:%d", 
+        addonName, errorType, sourceFile, sourceLine)
+    row.mainText:SetText(mainLine)
     
-    row.summary:SetText(string.format("%s in %s:%d", 
-        summary.type or "ERROR",
-        summary.sourceFile or "?",
-        summary.sourceLine or 0
-    ))
-    row.summary:SetTextColor(unpack(Theme.text))
+    -- Hint line
+    row.hintText:SetText("|cff888888> " .. hint .. "|r")
     
-    row.hint:SetText("└─ " .. (summary.hint or "No hint available"))
-    row.hint:SetTextColor(unpack(Theme.textDim))
-    
-    local occurrences = data.occurrences or {}
-    local count = occurrences.count or 1
-    row.countLabel:SetText("(x" .. count .. ")")
-    row.countLabel:SetTextColor(count > 1 and unpack(Theme.levelWarn) or unpack(Theme.textDim))
-    
-    -- Expand button
-    row.expandBtn.text:SetText(isExpanded and "[Less]" or "[More]")
-    row.expandBtn:SetScript("OnClick", function()
-        self:ToggleExpand(data.id)
-    end)
-    row.expandBtn:SetScript("OnEnter", function(self)
-        self.text:SetTextColor(unpack(Theme.text))
-    end)
-    row.expandBtn:SetScript("OnLeave", function(self)
-        self.text:SetTextColor(unpack(Theme.textDim))
-    end)
+    -- Count
+    row.countText:SetText("(x" .. count .. ")")
+    if count > 1 then
+        row.countText:SetTextColor(unpack(Theme.levelWarn))
+    else
+        row.countText:SetTextColor(unpack(Theme.textDim))
+    end
     
     -- Copy button
+    row.copyBtn.text:SetTextColor(unpack(Theme.textDim))
     row.copyBtn:SetScript("OnClick", function()
         self:CopyError(data)
     end)
-    row.copyBtn:SetScript("OnEnter", function(self)
-        self.text:SetTextColor(unpack(Theme.text))
+    row.copyBtn:SetScript("OnEnter", function(btn)
+        btn.text:SetTextColor(unpack(Theme.text))
     end)
-    row.copyBtn:SetScript("OnLeave", function(self)
-        self.text:SetTextColor(unpack(Theme.textDim))
+    row.copyBtn:SetScript("OnLeave", function(btn)
+        btn.text:SetTextColor(unpack(Theme.textDim))
     end)
     
-    -- Click to select
+    -- Row click to select
+    row:EnableMouse(true)
     row:SetScript("OnMouseDown", function(_, button)
         if button == "LeftButton" then
             self:SelectError(data)
@@ -144,7 +135,7 @@ function ErrorsTab:RenderRow(row, data, index)
     
     -- Selection highlight
     if self.selectedError == data.id then
-        row:SetBackdropColor(unpack(Theme.highlight))
+        row:SetBackdropColor(0.3, 0.3, 0.5, 0.5)
     end
 end
 
@@ -153,6 +144,7 @@ function ErrorsTab:RefreshData()
     
     local errors = MedaDebug.ErrorHandler:GetErrors()
     self.scrollList:SetData(errors)
+    self.scrollList:Refresh()
 end
 
 function ErrorsTab:OnNewError(entry)
@@ -164,15 +156,15 @@ function ErrorsTab:OnNewError(entry)
     end
 end
 
-function ErrorsTab:ToggleExpand(errorId)
-    self.expandedErrors[errorId] = not self.expandedErrors[errorId]
-    self.scrollList:Refresh()
-end
-
 function ErrorsTab:SelectError(data)
     self.selectedError = data.id
     _G.SELECTED = data -- For console access
     self.scrollList:Refresh()
+    
+    -- Log selection for debugging in console
+    if MedaDebug.db and MedaDebug.db.options.devMode then
+        print("|cff00ff00[MedaDebug]|r Error selected - access via SELECTED global in console")
+    end
 end
 
 function ErrorsTab:CopyError(data)
@@ -180,36 +172,77 @@ function ErrorsTab:CopyError(data)
     
     local text = MedaDebug.ErrorHandler:FormatForCopy(data)
     
-    -- Show copy dialog
-    if MedaUI.copyDialog then
-        MedaUI.copyDialog.editBox:SetText(text)
-        MedaUI.copyDialog.editBox:HighlightText()
-        MedaUI.copyDialog:Show()
-    else
-        -- Fallback: create simple dialog
-        StaticPopupDialogs["MEDADEBUG_COPY"] = {
-            text = "Press Ctrl+C to copy",
-            button1 = "Close",
-            hasEditBox = true,
-            editBoxWidth = 350,
-            OnShow = function(self)
-                self.editBox:SetText(text)
-                self.editBox:HighlightText()
-                self.editBox:SetFocus()
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-        }
-        StaticPopup_Show("MEDADEBUG_COPY")
+    -- Create custom copy dialog if it doesn't exist
+    if not self.copyDialog then
+        local Theme = MedaUI:GetTheme()
+        
+        local dialog = CreateFrame("Frame", "MedaDebugCopyDialog", UIParent, "BackdropTemplate")
+        dialog:SetSize(500, 350)
+        dialog:SetPoint("CENTER")
+        dialog:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+        })
+        dialog:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+        dialog:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        dialog:SetFrameStrata("DIALOG")
+        dialog:SetMovable(true)
+        dialog:EnableMouse(true)
+        dialog:RegisterForDrag("LeftButton")
+        dialog:SetScript("OnDragStart", dialog.StartMoving)
+        dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
+        dialog:Hide()
+        
+        -- Title
+        local title = dialog:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        title:SetPoint("TOP", 0, -10)
+        title:SetText("Error Report - Press Ctrl+C to copy")
+        title:SetTextColor(1, 0.8, 0)
+        
+        -- Close button
+        local closeBtn = CreateFrame("Button", nil, dialog)
+        closeBtn:SetSize(20, 20)
+        closeBtn:SetPoint("TOPRIGHT", -5, -5)
+        closeBtn:SetNormalFontObject("GameFontNormal")
+        closeBtn:SetText("X")
+        closeBtn:GetFontString():SetTextColor(0.8, 0.8, 0.8)
+        closeBtn:SetScript("OnClick", function() dialog:Hide() end)
+        closeBtn:SetScript("OnEnter", function(self) self:GetFontString():SetTextColor(1, 0.3, 0.3) end)
+        closeBtn:SetScript("OnLeave", function(self) self:GetFontString():SetTextColor(0.8, 0.8, 0.8) end)
+        
+        -- Scroll frame for the edit box
+        local scrollFrame = CreateFrame("ScrollFrame", nil, dialog, "UIPanelScrollFrameTemplate")
+        scrollFrame:SetPoint("TOPLEFT", 10, -35)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
+        
+        -- Edit box
+        local editBox = CreateFrame("EditBox", nil, scrollFrame)
+        editBox:SetMultiLine(true)
+        editBox:SetFontObject("GameFontHighlightSmall")
+        editBox:SetWidth(scrollFrame:GetWidth() - 10)
+        editBox:SetAutoFocus(false)
+        editBox:SetScript("OnEscapePressed", function() dialog:Hide() end)
+        scrollFrame:SetScrollChild(editBox)
+        
+        dialog.editBox = editBox
+        self.copyDialog = dialog
+        
+        -- Register for ESC
+        tinsert(UISpecialFrames, "MedaDebugCopyDialog")
     end
+    
+    -- Show dialog with text
+    self.copyDialog.editBox:SetText(text)
+    self.copyDialog:Show()
+    self.copyDialog.editBox:HighlightText()
+    self.copyDialog.editBox:SetFocus()
 end
 
 function ErrorsTab:Clear()
     if MedaDebug.ErrorHandler then
         MedaDebug.ErrorHandler:ClearErrors()
     end
-    wipe(self.expandedErrors)
     self.selectedError = nil
     self:RefreshData()
 end

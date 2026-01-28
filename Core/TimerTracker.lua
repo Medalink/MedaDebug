@@ -42,7 +42,7 @@ end
 function TimerTracker:Enable()
     if self.isEnabled then return end
     self:Initialize()
-    MedaDebug:Log("MedaDebug", "Timer tracking enabled", "INFO")
+    MedaDebug:LogInternal("MedaDebug", "Timer tracking enabled", "INFO")
 end
 
 --- Disable timer tracking at runtime
@@ -58,7 +58,7 @@ function TimerTracker:Disable()
     -- Clear tracked timers
     wipe(self.timers)
     
-    MedaDebug:Log("MedaDebug", "Timer tracking disabled", "INFO")
+    MedaDebug:LogInternal("MedaDebug", "Timer tracking disabled", "INFO")
 end
 
 --- Check if enabled

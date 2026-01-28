@@ -203,7 +203,7 @@ function InspectorTab:WatchFrame()
     local name = self.currentFrame:GetName()
     if name and MedaDebug.VariableWatch then
         MedaDebug.VariableWatch:AddWatch(name)
-        MedaDebug:Log("MedaDebug", "Added " .. name .. " to watch list", "INFO")
+        MedaDebug:LogInternal("MedaDebug", "Added " .. name .. " to watch list", "INFO")
     end
 end
 

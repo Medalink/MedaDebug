@@ -85,6 +85,15 @@ local function CreateSignature(entry)
 end
 
 function ErrorHandler:Initialize()
+    -- Restore saved errors from session (before connecting to grabber)
+    if MedaDebug.db and MedaDebug.db.options.restoreSessionData then
+        if MedaDebug.log and MedaDebug.log.session and MedaDebug.log.session.errors then
+            for _, savedError in ipairs(MedaDebug.log.session.errors) do
+                self:RestoreSavedError(savedError)
+            end
+        end
+    end
+    
     -- Connect to ErrorGrabber
     local grabber = _G.MedaDebugErrorGrabber
     if not grabber then
@@ -95,7 +104,7 @@ function ErrorHandler:Initialize()
     -- Mark as ready
     grabber.isReady = true
     
-    -- Process existing errors
+    -- Process existing errors (from before UI loaded)
     for _, entry in ipairs(grabber.errors) do
         if not entry.processed then
             self:ProcessError(entry)
@@ -108,6 +117,47 @@ function ErrorHandler:Initialize()
         self:ProcessError(entry)
         entry.processed = true
     end
+end
+
+--- Restore a saved error from session log
+--- @param savedError table Saved error entry from log
+function ErrorHandler:RestoreSavedError(savedError)
+    if not savedError.error then return end
+    
+    local err = savedError.error
+    
+    -- Reconstruct the processed error format
+    local entry = {
+        summary = {
+            type = err.type or "UNKNOWN",
+            shortMessage = err.shortMessage or err.rawMessage or "Unknown error",
+            sourceAddon = err.addon or "Unknown",
+            sourceFile = err.file or "unknown",
+            sourceLine = err.line or 0,
+            hint = err.hint or "No hint available",
+        },
+        context = {
+            callingFunction = "?",
+            callChain = err.callChain or {},
+        },
+        stackFrames = {},
+        raw = {
+            message = err.rawMessage or "",
+            stack = err.rawStack or "",
+            timestamp = savedError.timestamp or time(),
+            datetime = savedError.datetime or date("%H:%M:%S"),
+        },
+        occurrences = {
+            count = 1,
+            firstSeen = savedError.timestamp or time(),
+            lastSeen = savedError.timestamp or time(),
+        },
+        id = #self.errors + 1,
+        restored = true, -- Mark as restored
+    }
+    
+    -- Add to errors list (don't group restored errors)
+    self.errors[#self.errors + 1] = entry
 end
 
 --- Process a raw error into structured format
@@ -215,6 +265,16 @@ function ErrorHandler:ProcessError(rawEntry)
             }
         end
         
+        -- Output to chat if enabled
+        if MedaDebug.db and MedaDebug.db.options.outputToChat then
+            print(string.format("|cffff4444[Error]|r |cff88bbff[%s]|r %s in %s:%d", 
+                entry.summary.sourceAddon,
+                entry.summary.type,
+                entry.summary.sourceFile,
+                entry.summary.sourceLine))
+            print("  └─ " .. entry.summary.hint)
+        end
+        
         -- Notify UI of new error
         if self.onNewError then
             self.onNewError(entry)
@@ -257,6 +317,11 @@ function ErrorHandler:ClearErrors()
         grabber:ClearErrors()
     end
     
+    -- Clear session log errors too
+    if MedaDebug.log and MedaDebug.log.session and MedaDebug.log.session.errors then
+        wipe(MedaDebug.log.session.errors)
+    end
+    
     -- Notify UI
     if self.onErrorsCleared then
         self.onErrorsCleared()
@@ -267,35 +332,46 @@ end
 --- @param entry table Error entry
 --- @return string Formatted error text
 function ErrorHandler:FormatForCopy(entry)
+    -- Ensure all required fields exist
+    local summary = entry.summary or {}
+    local raw = entry.raw or {}
+    local occurrences = entry.occurrences or {}
+    local context = entry.context or {}
+    
     local lines = {
         "=== MedaDebug Error Report ===",
-        "Type: " .. entry.summary.type,
-        "Addon: " .. entry.summary.sourceAddon,
-        "Time: " .. entry.raw.datetime .. " (occurred " .. entry.occurrences.count .. " times)",
+        "Type: " .. (summary.type or "UNKNOWN"),
+        "Addon: " .. (summary.sourceAddon or "Unknown"),
+        "Time: " .. (raw.datetime or "?") .. " (occurred " .. (occurrences.count or 1) .. " times)",
         "",
         "Summary:",
-        entry.summary.shortMessage,
+        summary.shortMessage or raw.message or "No message",
         "",
         "Location:",
-        "File: " .. entry.summary.sourceFile,
-        "Line: " .. entry.summary.sourceLine,
-        "Function: " .. entry.context.callingFunction,
+        "File: " .. (summary.sourceFile or "?"),
+        "Line: " .. tostring(summary.sourceLine or 0),
+        "Function: " .. (context.callingFunction or "?"),
         "",
         "Call Chain:",
     }
     
-    for i, call in ipairs(entry.context.callChain) do
-        lines[#lines + 1] = i .. ". " .. call
+    local callChain = context.callChain or {}
+    if #callChain > 0 then
+        for i, call in ipairs(callChain) do
+            lines[#lines + 1] = i .. ". " .. call
+        end
+    else
+        lines[#lines + 1] = "(no call chain available)"
     end
     
     lines[#lines + 1] = ""
-    lines[#lines + 1] = "Hint: " .. entry.summary.hint
+    lines[#lines + 1] = "Hint: " .. (summary.hint or "No hint available")
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Raw Error:"
-    lines[#lines + 1] = entry.raw.message
+    lines[#lines + 1] = raw.message or "(no message)"
     lines[#lines + 1] = ""
     lines[#lines + 1] = "Full Stack:"
-    lines[#lines + 1] = entry.raw.stack
+    lines[#lines + 1] = raw.stack or "(no stack trace)"
     lines[#lines + 1] = "==="
     
     return table.concat(lines, "\n")

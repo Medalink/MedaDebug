@@ -212,6 +212,22 @@ function DebugFrame:Initialize()
         local freed = before - after
         MedaDebug:LogInternal("MedaDebug", string.format("Garbage collected: %.1f KB freed", freed), "INFO")
     end)
+
+    -- Copy button - copies messages between reloads
+    local copyBtn = MedaUI:CreateButton(self.quickActions, "Copy", 50, 26)
+    copyBtn:SetPoint("LEFT", gcBtn, "RIGHT", 8, 0)
+    copyBtn:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_TOP")
+        GameTooltip:SetText("Copy messages between reloads")
+        GameTooltip:AddLine("Copies timestamp + message only", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    copyBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    copyBtn:SetScript("OnClick", function()
+        self:CopyMessagesForAI()
+    end)
     
     -- Settings button (right side)
     local settingsBtn = CreateFrame("Button", nil, self.quickActions, "BackdropTemplate")
@@ -268,16 +284,31 @@ function DebugFrame:Initialize()
         if MedaDebug.db then
             MedaDebug.db.frameState.isOpen = true
         end
-        -- Refresh current tab when frame becomes visible
+        -- Ensure current tab content exists and refresh it
         local currentTab = self.tabContents[self.activeTab]
-        if currentTab and currentTab.OnShow then
-            currentTab:OnShow()
+        if not currentTab then
+            -- Tab content not created yet, create it now
+            currentTab = self:CreateTabContent(self.activeTab)
+            self.tabContents[self.activeTab] = currentTab
+        end
+        if currentTab then
+            if currentTab.frame then
+                currentTab.frame:Show()
+            end
+            if currentTab.OnShow then
+                currentTab:OnShow()
+            end
         end
     end)
     
     -- Connect to output manager for updates
     if MedaDebug.OutputManager then
         MedaDebug.OutputManager.onNewMessage = function(entry)
+            -- Refresh filter dropdown in case new addon appeared
+            if entry and entry.addon then
+                self:RefreshFilterDropdown()
+            end
+
             -- Refresh messages tab if it exists and is visible
             if self.tabContents.messages then
                 if self.tabContents.messages.OnNewMessage then
@@ -410,13 +441,15 @@ end
 
 function DebugFrame:RefreshFilterDropdown()
     local options = {{value = "all", label = "All Addons"}}
-    
-    -- Get registered addons
-    local addons = MedaDebug:GetRegisteredAddons()
-    for _, addon in ipairs(addons) do
-        options[#options + 1] = {value = addon, label = addon}
+
+    -- Get addons from actual messages
+    if MedaDebug.OutputManager then
+        local addons = MedaDebug.OutputManager:GetAddonsFromMessages()
+        for _, addon in ipairs(addons) do
+            options[#options + 1] = {value = addon, label = addon}
+        end
     end
-    
+
     self.filterDropdown:SetOptions(options)
 end
 
@@ -476,4 +509,13 @@ end
 
 function DebugFrame:IsShown()
     return self.frame and self.frame:IsShown()
+end
+
+function DebugFrame:CopyMessagesForAI()
+    if not MedaDebug.OutputManager then return end
+
+    local text = MedaDebug.OutputManager:GetMessagesForAI()
+
+    -- Use MedaUI's shared TextViewer
+    MedaUI:ShowTextViewer("Messages - Press Ctrl+C to copy", text)
 end

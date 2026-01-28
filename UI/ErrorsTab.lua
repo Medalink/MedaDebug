@@ -169,74 +169,11 @@ end
 
 function ErrorsTab:CopyError(data)
     if not MedaDebug.ErrorHandler then return end
-    
+
     local text = MedaDebug.ErrorHandler:FormatForCopy(data)
-    
-    -- Create custom copy dialog if it doesn't exist
-    if not self.copyDialog then
-        local Theme = MedaUI:GetTheme()
-        
-        local dialog = CreateFrame("Frame", "MedaDebugCopyDialog", UIParent, "BackdropTemplate")
-        dialog:SetSize(500, 350)
-        dialog:SetPoint("CENTER")
-        dialog:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            edgeSize = 1,
-        })
-        dialog:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
-        dialog:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
-        dialog:SetFrameStrata("DIALOG")
-        dialog:SetMovable(true)
-        dialog:EnableMouse(true)
-        dialog:RegisterForDrag("LeftButton")
-        dialog:SetScript("OnDragStart", dialog.StartMoving)
-        dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
-        dialog:Hide()
-        
-        -- Title
-        local title = dialog:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        title:SetPoint("TOP", 0, -10)
-        title:SetText("Error Report - Press Ctrl+C to copy")
-        title:SetTextColor(1, 0.8, 0)
-        
-        -- Close button
-        local closeBtn = CreateFrame("Button", nil, dialog)
-        closeBtn:SetSize(20, 20)
-        closeBtn:SetPoint("TOPRIGHT", -5, -5)
-        closeBtn:SetNormalFontObject("GameFontNormal")
-        closeBtn:SetText("X")
-        closeBtn:GetFontString():SetTextColor(0.8, 0.8, 0.8)
-        closeBtn:SetScript("OnClick", function() dialog:Hide() end)
-        closeBtn:SetScript("OnEnter", function(self) self:GetFontString():SetTextColor(1, 0.3, 0.3) end)
-        closeBtn:SetScript("OnLeave", function(self) self:GetFontString():SetTextColor(0.8, 0.8, 0.8) end)
-        
-        -- Scroll frame for the edit box
-        local scrollFrame = CreateFrame("ScrollFrame", nil, dialog, "UIPanelScrollFrameTemplate")
-        scrollFrame:SetPoint("TOPLEFT", 10, -35)
-        scrollFrame:SetPoint("BOTTOMRIGHT", -30, 10)
-        
-        -- Edit box
-        local editBox = CreateFrame("EditBox", nil, scrollFrame)
-        editBox:SetMultiLine(true)
-        editBox:SetFontObject("GameFontHighlightSmall")
-        editBox:SetWidth(scrollFrame:GetWidth() - 10)
-        editBox:SetAutoFocus(false)
-        editBox:SetScript("OnEscapePressed", function() dialog:Hide() end)
-        scrollFrame:SetScrollChild(editBox)
-        
-        dialog.editBox = editBox
-        self.copyDialog = dialog
-        
-        -- Register for ESC
-        tinsert(UISpecialFrames, "MedaDebugCopyDialog")
-    end
-    
-    -- Show dialog with text
-    self.copyDialog.editBox:SetText(text)
-    self.copyDialog:Show()
-    self.copyDialog.editBox:HighlightText()
-    self.copyDialog.editBox:SetFocus()
+
+    -- Use MedaUI's shared TextViewer
+    MedaUI:ShowTextViewer("Error Report - Press Ctrl+C to copy", text)
 end
 
 function ErrorsTab:Clear()

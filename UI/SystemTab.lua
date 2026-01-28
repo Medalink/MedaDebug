@@ -154,16 +154,10 @@ function SystemTab:UpdateStats(stats)
     
     local Theme = MedaUI:GetTheme()
     
-    -- FPS
+    -- FPS (using MedaUI status color utility)
     local fps = stats.fps or 0
     self.fpsLabel:SetText(string.format("%.0f", fps))
-    if fps < 30 then
-        self.fpsLabel:SetTextColor(1, 0.3, 0.3)
-    elseif fps < 60 then
-        self.fpsLabel:SetTextColor(1, 0.8, 0)
-    else
-        self.fpsLabel:SetTextColor(0.4, 0.9, 0.4)
-    end
+    self.fpsLabel:SetTextColor(MedaUI:GetFPSColor(fps))
     
     -- Memory
     local mem = stats.memory or 0
@@ -187,9 +181,9 @@ function SystemTab:UpdateStats(stats)
     -- Addon count
     self.addonsLabel:SetText(tostring(stats.addonCount or 0))
     
-    -- Combat
+    -- Combat (using MedaUI status color utility)
     self.combatLabel:SetText(stats.inCombat and "Yes" or "No")
-    self.combatLabel:SetTextColor(stats.inCombat and 1 or 0.4, stats.inCombat and 0.3 or 0.9, stats.inCombat and 0.3 or 0.4)
+    self.combatLabel:SetTextColor(MedaUI:GetCombatColor(stats.inCombat))
     
     -- Reloads
     if MedaDebug.log and MedaDebug.log.session then

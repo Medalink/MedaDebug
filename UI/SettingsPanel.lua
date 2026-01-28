@@ -23,6 +23,9 @@ function SettingsPanel:Initialize()
         minHeight = 400,
     })
 
+    -- Add addon icon watermark
+    self.frame:SetAddonIcon("Interface\\AddOns\\MedaDebug\\Media\\debug")
+
     -- Restore saved state
     if MedaDebug.db.settingsPanelState then
         self.frame:RestoreState(MedaDebug.db.settingsPanelState)
@@ -349,8 +352,58 @@ function SettingsPanel:Initialize()
     confirmReloadCheckbox.OnValueChanged = function(_, checked)
         MedaDebug.db.options.confirmReload = checked
     end
-    yPos = yPos - 32
-    
+    yPos = yPos - 16
+
+    CreateSeparator()
+
+    -- =====================
+    -- Danger Zone Section
+    -- =====================
+    CreateSection("Danger Zone")
+
+    local dangerLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    dangerLabel:SetPoint("TOPLEFT", 12, yPos)
+    dangerLabel:SetText("Reset all settings and clear saved data.")
+    dangerLabel:SetTextColor(0.9, 0.5, 0.5)
+    yPos = yPos - 24
+
+    -- Reset to Defaults button
+    local resetBtn = MedaUI:CreateButton(content, "Reset to Defaults", 140, 28)
+    resetBtn:SetPoint("TOPLEFT", 12, yPos)
+    resetBtn:SetScript("OnClick", function()
+        -- Show confirmation dialog
+        StaticPopupDialogs["MEDADEBUG_RESET_CONFIRM"] = {
+            text = "Are you sure you want to reset MedaDebug to defaults?\n\nThis will clear all settings and message history.\n\nThe UI will reload automatically.",
+            button1 = "Reset",
+            button2 = "Cancel",
+            OnAccept = function()
+                MedaDebug:ResetToDefaults()
+                ReloadUI()
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("MEDADEBUG_RESET_CONFIRM")
+    end)
+
+    -- Style the button red
+    resetBtn:SetScript("OnEnter", function(btn)
+        btn:SetBackdropColor(0.6, 0.2, 0.2, 1)
+        GameTooltip:SetOwner(btn, "ANCHOR_TOP")
+        GameTooltip:SetText("Reset all settings to defaults")
+        GameTooltip:AddLine("This will clear all saved data and reload the UI.", 1, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    resetBtn:SetScript("OnLeave", function(btn)
+        btn:SetBackdropColor(0.4, 0.15, 0.15, 1)
+        GameTooltip:Hide()
+    end)
+    resetBtn:SetBackdropColor(0.4, 0.15, 0.15, 1)
+
+    yPos = yPos - 40
+
     -- Set final content height
     content:SetHeight(math.abs(yPos) + 20)
     

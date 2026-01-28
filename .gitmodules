@@ -1,0 +1,3 @@
+[submodule "Libs/MedaUI"]
+	path = Libs/MedaUI
+	url = https://github.com/Medalink/MedaUI.git

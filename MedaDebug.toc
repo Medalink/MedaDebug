@@ -1,0 +1,41 @@
+## Interface: 120001, 120000
+## Title: MedaDebug
+## Notes: Developer toolkit for WoW addon development with AI agent integration
+## Author: Medalink
+## Version: 1.0.0
+## SavedVariables: MedaDebugDB, MedaDebugLog, MedaDebugErrors
+
+## X-Category: Development Tools
+## X-Website: https://github.com/Medalink/MedaDebug
+
+# Bootstrap - MUST load first (zero dependencies)
+Bootstrap\ErrorGrabber.lua
+
+# Libraries
+Libs\MedaUI\MedaUI.xml
+
+# Core modules
+Core\Core.lua
+Core\API.lua
+Core\OutputManager.lua
+Core\ErrorHandler.lua
+Core\SystemMonitor.lua
+Core\EventMonitor.lua
+Core\FrameInspector.lua
+Core\VariableWatch.lua
+Core\SVDiff.lua
+Core\TimerTracker.lua
+
+# UI modules
+UI\DebugFrame.lua
+UI\QuickActions.lua
+UI\SearchBar.lua
+UI\MessagesTab.lua
+UI\ErrorsTab.lua
+UI\EventsTab.lua
+UI\ConsoleTab.lua
+UI\InspectorTab.lua
+UI\WatchTab.lua
+UI\TimersTab.lua
+UI\SystemTab.lua
+UI\SettingsPanel.lua

@@ -1,0 +1,10 @@
+package-as: MedaDebug
+
+externals:
+  Libs/MedaUI: https://github.com/Medalink/MedaUI
+
+ignore:
+  - .git
+  - .gitmodules
+  - .cursor
+  - README.md

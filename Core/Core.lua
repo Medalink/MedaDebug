@@ -63,6 +63,13 @@ local DEFAULT_DB = {
         systemUpdateInterval = 1,
         memoryUpdateInterval = 10,  -- Memory scan is expensive, do it less often
         showMemoryBreakdown = true,
+        
+        -- Error Notifications
+        errorNotification = {
+            enabled = true,
+            size = 64,      -- 32-128 range
+            opacity = 1.0,  -- 0.3-1.0 range
+        },
     },
     registeredAddons = {},
     minimapButton = { hide = false },
@@ -85,6 +92,13 @@ local DEFAULT_DB = {
         },
         activeTab = "messages",
         filter = "all",
+    },
+    
+    -- Error notification position
+    errorNotificationPosition = {
+        point = "TOPRIGHT",
+        x = -100,
+        y = -100,
     },
 }
 
@@ -211,6 +225,55 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             
             -- Initialize minimap button
             MedaDebug:InitializeMinimapButton()
+            
+            -- Initialize error notification
+            if MedaDebug.ErrorNotification and MedaDebug.ErrorNotification.Initialize then
+                MedaDebug.ErrorNotification:Initialize()
+                
+                -- Connect error handler callbacks to notification
+                if MedaDebug.ErrorHandler then
+                    local originalOnNewError = MedaDebug.ErrorHandler.onNewError
+                    MedaDebug.ErrorHandler.onNewError = function(entry)
+                        -- Update notification
+                        if MedaDebug.ErrorNotification then
+                            local count = MedaDebug.ErrorHandler:GetErrorCount()
+                            MedaDebug.ErrorNotification:UpdateCount(count)
+                        end
+                        -- Call original handler (DebugFrame)
+                        if originalOnNewError then
+                            originalOnNewError(entry)
+                        end
+                    end
+                    
+                    local originalOnErrorUpdated = MedaDebug.ErrorHandler.onErrorUpdated
+                    MedaDebug.ErrorHandler.onErrorUpdated = function(entry)
+                        -- Update notification count (occurrences changed)
+                        if MedaDebug.ErrorNotification then
+                            local count = MedaDebug.ErrorHandler:GetErrorCount()
+                            MedaDebug.ErrorNotification:UpdateCount(count)
+                        end
+                        -- Call original handler
+                        if originalOnErrorUpdated then
+                            originalOnErrorUpdated(entry)
+                        end
+                    end
+                    
+                    MedaDebug.ErrorHandler.onErrorsCleared = function()
+                        -- Hide notification
+                        if MedaDebug.ErrorNotification then
+                            MedaDebug.ErrorNotification:UpdateCount(0)
+                        end
+                        -- Update DebugFrame badge
+                        if MedaDebug.DebugFrame and MedaDebug.DebugFrame.UpdateErrorBadge then
+                            MedaDebug.DebugFrame:UpdateErrorBadge()
+                        end
+                        -- Refresh errors tab
+                        if MedaDebug.ErrorsTab and MedaDebug.ErrorsTab.RefreshData then
+                            MedaDebug.ErrorsTab:RefreshData()
+                        end
+                    end
+                end
+            end
         end)
         
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -403,10 +466,10 @@ function MedaDebug:InitializeMinimapButton()
     local MedaUI = LibStub("MedaUI-1.0", true)
     if not MedaUI then return end
     
-    -- Use a bug/debug icon
+    -- Use custom debug icon
     self.minimapButton = MedaUI:CreateMinimapButton(
         "MedaDebug",
-        "Interface\\Icons\\INV_Misc_Gear_01",  -- Gear icon for debug tool
+        "Interface\\AddOns\\MedaDebug\\Media\\debug",
         function() -- Left click - toggle debug window
             if self.DebugFrame then
                 self.DebugFrame:Toggle()

@@ -3,6 +3,7 @@
 ## Notes: Developer toolkit for WoW addon development with AI agent integration
 ## Author: Medalink
 ## Version: 1.0.0
+## IconTexture: Interface\AddOns\MedaDebug\Media\debug
 ## SavedVariables: MedaDebugDB, MedaDebugLog, MedaDebugErrors
 
 ## X-Category: Development Tools
@@ -38,4 +39,5 @@ UI\InspectorTab.lua
 UI\WatchTab.lua
 UI\TimersTab.lua
 UI\SystemTab.lua
+UI\ErrorNotification.lua
 UI\SettingsPanel.lua

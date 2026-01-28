@@ -131,6 +131,59 @@ function SettingsPanel:Initialize()
     CreateSeparator()
     
     -- =====================
+    -- Error Notifications Section
+    -- =====================
+    CreateSection("Error Notifications")
+    
+    -- Enable error notifications
+    local errorNotifCheckbox = MedaUI:CreateCheckbox(content, "Enable Error Notifications")
+    errorNotifCheckbox:SetPoint("TOPLEFT", 12, yPos)
+    errorNotifCheckbox:SetChecked(MedaDebug.db.options.errorNotification.enabled)
+    errorNotifCheckbox.OnValueChanged = function(_, checked)
+        MedaDebug.db.options.errorNotification.enabled = checked
+        if MedaDebug.ErrorNotification then
+            MedaDebug.ErrorNotification:ApplySettings()
+        end
+    end
+    yPos = yPos - 24
+    
+    -- Icon size slider
+    local iconSizeLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    iconSizeLabel:SetPoint("TOPLEFT", 12, yPos)
+    iconSizeLabel:SetText("Icon size:")
+    iconSizeLabel:SetTextColor(unpack(Theme.text))
+    
+    local iconSizeSlider = MedaUI:CreateSlider(content, 180, 32, 128, 8)
+    iconSizeSlider:SetPoint("TOPLEFT", 140, yPos + 4)
+    iconSizeSlider:SetValue(MedaDebug.db.options.errorNotification.size)
+    iconSizeSlider.OnValueChanged = function(_, value)
+        MedaDebug.db.options.errorNotification.size = value
+        if MedaDebug.ErrorNotification then
+            MedaDebug.ErrorNotification:ApplySettings()
+        end
+    end
+    yPos = yPos - 32
+    
+    -- Opacity slider
+    local opacityLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    opacityLabel:SetPoint("TOPLEFT", 12, yPos)
+    opacityLabel:SetText("Opacity:")
+    opacityLabel:SetTextColor(unpack(Theme.text))
+    
+    local opacitySlider = MedaUI:CreateSlider(content, 180, 0.3, 1.0, 0.1)
+    opacitySlider:SetPoint("TOPLEFT", 140, yPos + 4)
+    opacitySlider:SetValue(MedaDebug.db.options.errorNotification.opacity)
+    opacitySlider.OnValueChanged = function(_, value)
+        MedaDebug.db.options.errorNotification.opacity = value
+        if MedaDebug.ErrorNotification then
+            MedaDebug.ErrorNotification:SetOpacity(value)
+        end
+    end
+    yPos = yPos - 16
+    
+    CreateSeparator()
+    
+    -- =====================
     -- Real-time Monitoring Section
     -- =====================
     CreateSection("Real-time Monitoring")

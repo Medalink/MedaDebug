@@ -34,68 +34,73 @@ function DebugFrame:Initialize()
     local Theme = MedaUI:GetTheme()
     
     -- Create main panel
-    local frameState = MedaDebug.db.frameState
-    local width = frameState.size.width or 700
-    local height = frameState.size.height or 500
-    
-    self.frame = MedaUI:CreatePanel("MedaDebugFrame", width, height, "MedaDebug")
+    self.frame = MedaUI:CreatePanel("MedaDebugFrame", 700, 500, "MedaDebug")
     self.frame:SetResizable(true, {
         minWidth = 500,
         minHeight = 400,
-        maxWidth = 1400,
-        maxHeight = 900,
     })
-    
+
+    -- Restore saved state (position and size)
+    local frameState = MedaDebug.db.frameState
+    if frameState then
+        self.frame:RestoreState(frameState)
+    end
+
+    -- Save state on move/resize
+    local function saveState(state)
+        if MedaDebug.db then
+            MedaDebug.db.frameState.position = state.position
+            MedaDebug.db.frameState.size = state.size
+        end
+    end
+
+    self.frame.OnMove = function(_, state)
+        saveState(state)
+    end
+
+    self.frame.OnResize = function(_, state)
+        saveState(state)
+        -- Notify tabs of resize
+        self:OnResize(state.size.width, state.size.height)
+    end
+
     -- Override close button to use our Hide method (saves state)
     if self.frame.closeButton then
         self.frame.closeButton:SetScript("OnClick", function()
             self:Hide()
         end)
     end
-    
+
     -- Add settings button to title bar (white gear icon)
     local settingsBtn = CreateFrame("Button", nil, self.frame.titleBar, "BackdropTemplate")
     settingsBtn:SetSize(20, 20)
     settingsBtn:SetPoint("RIGHT", self.frame.closeButton, "LEFT", -2, 0)
     settingsBtn:SetBackdrop(MedaUI:CreateBackdrop(false))
     settingsBtn:SetBackdropColor(0, 0, 0, 0)
-    
+
     settingsBtn.icon = settingsBtn:CreateTexture(nil, "OVERLAY")
     settingsBtn.icon:SetSize(16, 16)
     settingsBtn.icon:SetPoint("CENTER")
     settingsBtn.icon:SetTexture("Interface\\Buttons\\UI-OptionsButton")
     settingsBtn.icon:SetVertexColor(1, 1, 1)  -- White
-    
+
     settingsBtn:SetScript("OnEnter", function(self)
         self:SetBackdropColor(unpack(Theme.buttonHover))
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:SetText("Settings")
         GameTooltip:Show()
     end)
-    
+
     settingsBtn:SetScript("OnLeave", function(self)
         self:SetBackdropColor(0, 0, 0, 0)
         GameTooltip:Hide()
     end)
-    
+
     settingsBtn:SetScript("OnClick", function()
         if MedaDebug.SettingsPanel then
             MedaDebug.SettingsPanel:Toggle()
         end
     end)
-    
-    -- Restore position
-    local pos = frameState.position
-    if pos and pos.point then
-        self.frame:ClearAllPoints()
-        local relativeTo = pos.relativeTo and _G[pos.relativeTo] or UIParent
-        self.frame:SetPoint(pos.point, relativeTo, pos.relativePoint, pos.x, pos.y)
-    end
-    
-    -- Handle resize
-    self.frame.OnResize = function(_, w, h)
-        self:OnResize(w, h)
-    end
     
     local content = self.frame:GetContent()
     
@@ -110,7 +115,7 @@ function DebugFrame:Initialize()
     
     -- Toolbar area (tabs + filter row)
     self.toolbar = CreateFrame("Frame", nil, self.mainContent, "BackdropTemplate")
-    self.toolbar:SetHeight(56)
+    self.toolbar:SetHeight(68)
     self.toolbar:SetPoint("TOPLEFT", 0, 0)
     self.toolbar:SetPoint("TOPRIGHT", 0, 0)
     self.toolbar:SetBackdrop({
@@ -120,8 +125,8 @@ function DebugFrame:Initialize()
     
     -- Tab bar (full width on first row)
     self.tabBar = MedaUI:CreateTabBar(self.toolbar, TABS)
-    self.tabBar:SetPoint("TOPLEFT", 4, -4)
-    self.tabBar:SetPoint("TOPRIGHT", -4, -4)
+    self.tabBar:SetPoint("TOPLEFT", 8, -4)
+    self.tabBar:SetPoint("TOPRIGHT", -8, -4)
     self.tabBar.OnTabChanged = function(_, tabId, prevTab)
         self:OnTabChanged(tabId, prevTab)
     end
@@ -138,13 +143,13 @@ function DebugFrame:Initialize()
     self.filterDropdown = MedaUI:CreateDropdown(self.toolbar, 120, {
         {value = "all", label = "All Addons"},
     })
-    self.filterDropdown:SetPoint("TOPLEFT", 4, -30)
+    self.filterDropdown:SetPoint("TOPLEFT", 8, -36)
     self.filterDropdown.OnValueChanged = function(_, value)
         self:OnFilterChanged(value)
     end
     
     -- Clear button
-    self.clearBtn = MedaUI:CreateButton(self.toolbar, "Clear", 60, 22)
+    self.clearBtn = MedaUI:CreateButton(self.toolbar, "Clear", 60, 26)
     self.clearBtn:SetPoint("LEFT", self.filterDropdown, "RIGHT", 8, 0)
     self.clearBtn:SetScript("OnClick", function()
         self:ClearCurrentTab()
@@ -163,7 +168,7 @@ function DebugFrame:Initialize()
     
     -- Search bar (right side of second row)
     self.searchBox = MedaUI:CreateSearchBox(self.toolbar, 150)
-    self.searchBox:SetPoint("TOPRIGHT", -4, -30)
+    self.searchBox:SetPoint("TOPRIGHT", -8, -36)
     self.searchBox:SetPlaceholder("Search...")
     self.searchBox.OnSearch = function(_, text)
         self:OnSearch(text)
@@ -171,8 +176,8 @@ function DebugFrame:Initialize()
     
     -- Tab content container (main area)
     self.contentArea = CreateFrame("Frame", nil, self.mainContent)
-    self.contentArea:SetPoint("TOPLEFT", 4, -60)
-    self.contentArea:SetPoint("BOTTOMRIGHT", -4, 36)
+    self.contentArea:SetPoint("TOPLEFT", 8, -72)
+    self.contentArea:SetPoint("BOTTOMRIGHT", -8, 36)
     
     -- Quick actions bar
     self.quickActions = CreateFrame("Frame", nil, self.mainContent, "BackdropTemplate")
@@ -192,14 +197,14 @@ function DebugFrame:Initialize()
     quickActionsSep:SetColorTexture(unpack(Theme.border))
     
     -- Quick action buttons
-    local reloadBtn = MedaUI:CreateButton(self.quickActions, "/reload", 60, 22)
-    reloadBtn:SetPoint("LEFT", 4, 0)
+    local reloadBtn = MedaUI:CreateButton(self.quickActions, "/reload", 60, 26)
+    reloadBtn:SetPoint("LEFT", 8, 0)
     reloadBtn:SetScript("OnClick", function()
         ReloadUI()
     end)
-    
-    local gcBtn = MedaUI:CreateButton(self.quickActions, "GC", 40, 22)
-    gcBtn:SetPoint("LEFT", reloadBtn, "RIGHT", 4, 0)
+
+    local gcBtn = MedaUI:CreateButton(self.quickActions, "GC", 40, 26)
+    gcBtn:SetPoint("LEFT", reloadBtn, "RIGHT", 8, 0)
     gcBtn:SetScript("OnClick", function()
         local before = collectgarbage("count")
         collectgarbage("collect")
@@ -211,7 +216,7 @@ function DebugFrame:Initialize()
     -- Settings button (right side)
     local settingsBtn = CreateFrame("Button", nil, self.quickActions, "BackdropTemplate")
     settingsBtn:SetSize(24, 22)
-    settingsBtn:SetPoint("RIGHT", -4, 0)
+    settingsBtn:SetPoint("RIGHT", -8, 0)
     settingsBtn:SetBackdrop(MedaUI:CreateBackdrop(false))
     settingsBtn:SetBackdropColor(0, 0, 0, 0)
     

@@ -20,7 +20,7 @@ function MessagesTab:Initialize(parent)
     
     -- Create scroll list
     self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight(), {
-        rowHeight = 20,
+        rowHeight = 24,
         renderRow = function(row, data, index)
             self:RenderRow(row, data, index)
         end,
@@ -40,22 +40,22 @@ function MessagesTab:RenderRow(row, data, index)
     -- Create elements if needed
     if not row.timestamp then
         row.timestamp = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.timestamp:SetPoint("LEFT", 4, 0)
+        row.timestamp:SetPoint("LEFT", 8, 0)
         row.timestamp:SetWidth(60)
         row.timestamp:SetJustifyH("LEFT")
     end
-    
+
     if not row.addon then
         row.addon = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.addon:SetPoint("LEFT", row.timestamp, "RIGHT", 4, 0)
+        row.addon:SetPoint("LEFT", row.timestamp, "RIGHT", 8, 0)
         row.addon:SetWidth(100)
         row.addon:SetJustifyH("LEFT")
     end
-    
+
     if not row.message then
         row.message = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.message:SetPoint("LEFT", row.addon, "RIGHT", 4, 0)
-        row.message:SetPoint("RIGHT", -4, 0)
+        row.message:SetPoint("LEFT", row.addon, "RIGHT", 8, 0)
+        row.message:SetPoint("RIGHT", -8, 0)
         row.message:SetJustifyH("LEFT")
         row.message:SetWordWrap(false)
     end

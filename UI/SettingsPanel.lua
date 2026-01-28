@@ -13,18 +13,28 @@ SettingsPanel.frame = nil
 
 function SettingsPanel:Initialize()
     if self.frame then return end
-    
+
     local Theme = MedaUI:GetTheme()
-    
+
     -- Create panel
     self.frame = MedaUI:CreatePanel("MedaDebugSettings", 420, 520, "MedaDebug Settings")
     self.frame:SetResizable(true, {
         minWidth = 380,
         minHeight = 400,
-        maxWidth = 600,
-        maxHeight = 750,
     })
-    
+
+    -- Restore saved state
+    if MedaDebug.db.settingsPanelState then
+        self.frame:RestoreState(MedaDebug.db.settingsPanelState)
+    end
+
+    -- Save state on move/resize
+    local function saveState(state)
+        MedaDebug.db.settingsPanelState = state
+    end
+    self.frame.OnMove = function(_, state) saveState(state) end
+    self.frame.OnResize = function(_, state) saveState(state) end
+
     local panelContent = self.frame:GetContent()
     
     -- Dark inner background

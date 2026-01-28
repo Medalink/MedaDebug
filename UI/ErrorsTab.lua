@@ -19,7 +19,7 @@ function ErrorsTab:Initialize(parent)
     
     -- Create scroll list with taller rows for expanded view
     self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight(), {
-        rowHeight = 50,
+        rowHeight = 56,
         renderRow = function(row, data, index)
             self:RenderRow(row, data, index)
         end,
@@ -60,16 +60,16 @@ function ErrorsTab:RenderRow(row, data, index)
     -- Create elements if needed
     if not row.mainText then
         row.mainText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.mainText:SetPoint("TOPLEFT", 8, -8)
-        row.mainText:SetPoint("TOPRIGHT", -120, -8)
+        row.mainText:SetPoint("TOPLEFT", 10, -10)
+        row.mainText:SetPoint("TOPRIGHT", -120, -10)
         row.mainText:SetJustifyH("LEFT")
         row.mainText:SetWordWrap(false)
     end
-    
+
     if not row.hintText then
         row.hintText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.hintText:SetPoint("TOPLEFT", 20, -26)
-        row.hintText:SetPoint("TOPRIGHT", -120, -26)
+        row.hintText:SetPoint("TOPLEFT", 24, -30)
+        row.hintText:SetPoint("TOPRIGHT", -120, -30)
         row.hintText:SetJustifyH("LEFT")
         row.hintText:SetWordWrap(false)
     end
@@ -82,7 +82,7 @@ function ErrorsTab:RenderRow(row, data, index)
     if not row.copyBtn then
         row.copyBtn = CreateFrame("Button", nil, row)
         row.copyBtn:SetSize(50, 18)
-        row.copyBtn:SetPoint("RIGHT", -8, 0)
+        row.copyBtn:SetPoint("RIGHT", -10, 0)
         row.copyBtn.text = row.copyBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.copyBtn.text:SetPoint("CENTER")
         row.copyBtn.text:SetText("Copy")

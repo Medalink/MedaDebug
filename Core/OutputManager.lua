@@ -146,3 +146,94 @@ end
 function OutputManager:GetMessageCount()
     return #self.messages
 end
+
+--- Get unique addon names from messages
+--- @return table Array of addon names (sorted)
+function OutputManager:GetAddonsFromMessages()
+    local addonSet = {}
+    for _, msg in ipairs(self.messages) do
+        if msg.addon and msg.addon ~= "" then
+            addonSet[msg.addon] = true
+        end
+    end
+
+    local addons = {}
+    for addon in pairs(addonSet) do
+        addons[#addons + 1] = addon
+    end
+    table.sort(addons)
+    return addons
+end
+
+--- Get messages from current session for copying
+--- Formatted for AI: just timestamp and message, no addon/channel
+--- @return string Formatted text ready for copying
+function OutputManager:GetMessagesForAI()
+    local messages = self.messages
+    if #messages == 0 then
+        return "No messages found."
+    end
+
+    -- Find all reload separator indices
+    local reloadIndices = {}
+    for i = 1, #messages do
+        local msg = messages[i]
+        if msg.message and msg.message:match("^%-%-%-") then
+            reloadIndices[#reloadIndices + 1] = i
+        end
+    end
+
+    -- Determine range based on reload separators
+    local startIndex, endIndex
+
+    if #reloadIndices == 0 then
+        -- No reloads: get all messages
+        startIndex = 1
+        endIndex = #messages
+    elseif #reloadIndices == 1 then
+        local reloadIdx = reloadIndices[1]
+        -- Check if there are messages after the reload
+        if reloadIdx < #messages then
+            -- Get messages after the reload
+            startIndex = reloadIdx + 1
+            endIndex = #messages
+        else
+            -- Reload is at end, get messages before it
+            startIndex = 1
+            endIndex = reloadIdx - 1
+        end
+    else
+        -- Multiple reloads: get messages after the last reload
+        local lastReloadIdx = reloadIndices[#reloadIndices]
+        local prevReloadIdx = reloadIndices[#reloadIndices - 1]
+
+        if lastReloadIdx < #messages then
+            -- Get messages after the last reload
+            startIndex = lastReloadIdx + 1
+            endIndex = #messages
+        else
+            -- Last reload is at end, get messages between prev and last reload
+            startIndex = prevReloadIdx + 1
+            endIndex = lastReloadIdx - 1
+        end
+    end
+
+    -- Build formatted output
+    local lines = {}
+    for i = startIndex, endIndex do
+        local msg = messages[i]
+        if msg and msg.message then
+            -- Skip reload separators in output
+            if not msg.message:match("^%-%-%-") then
+                local timestamp = msg.datetime or ""
+                lines[#lines + 1] = timestamp .. " " .. msg.message
+            end
+        end
+    end
+
+    if #lines == 0 then
+        return "No messages found."
+    end
+
+    return table.concat(lines, "\n")
+end

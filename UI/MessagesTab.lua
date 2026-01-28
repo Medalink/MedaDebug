@@ -91,14 +91,14 @@ end
 
 function MessagesTab:RefreshData()
     if not self.scrollList or not MedaDebug.OutputManager then return end
-    
+
     local messages
     if self.currentFilter == "all" then
         messages = MedaDebug.OutputManager:GetMessages()
     else
         messages = MedaDebug.OutputManager:GetFilteredMessages(self.currentFilter)
     end
-    
+
     -- Apply search filter
     if self.searchText and self.searchText ~= "" then
         local filtered = {}
@@ -111,12 +111,18 @@ function MessagesTab:RefreshData()
         end
         messages = filtered
     end
-    
-    self.scrollList:SetData(messages)
-    
-    -- Auto-scroll if enabled
+
+    -- Reverse order so newest messages are at top
+    local reversed = {}
+    for i = #messages, 1, -1 do
+        reversed[#reversed + 1] = messages[i]
+    end
+
+    self.scrollList:SetData(reversed)
+
+    -- Auto-scroll to top (newest) if enabled
     if MedaDebug.db and MedaDebug.db.options.autoScroll then
-        self.scrollList:ScrollToBottom()
+        self.scrollList:ScrollToTop()
     end
 end
 
@@ -126,12 +132,12 @@ function MessagesTab:OnNewMessage(entry)
         self:RefreshData()
         return
     end
-    
+
     -- Check filter
     if self.currentFilter ~= "all" and entry.addon ~= self.currentFilter then
         return
     end
-    
+
     -- Check search
     if self.searchText and self.searchText ~= "" then
         local search = self.searchText:lower()
@@ -140,9 +146,9 @@ function MessagesTab:OnNewMessage(entry)
             return
         end
     end
-    
-    -- Add to list
-    self.scrollList:AddItem(entry, MedaDebug.db and MedaDebug.db.options.autoScroll)
+
+    -- Refresh to show new message at top (reversed order)
+    self:RefreshData()
 end
 
 function MessagesTab:OnFilterChanged(filter)

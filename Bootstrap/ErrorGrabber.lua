@@ -30,9 +30,18 @@ local previousHandler = geterrorhandler()
 
 -- Our error handler
 local function MedaDebugErrorHandler(errorMessage)
+    -- Skip if BugGrabber is handling errors (we'll get them via callback)
+    if ErrorGrabber.usingBugGrabber then
+        -- Just chain to previous handler
+        if previousHandler then
+            pcall(previousHandler, errorMessage)
+        end
+        return
+    end
+
     local timestamp = time()
     local stack = debugstack(3) -- Skip error handler frames
-    
+
     -- Create error entry
     local entry = {
         message = tostring(errorMessage) or "Unknown error",
@@ -42,12 +51,12 @@ local function MedaDebugErrorHandler(errorMessage)
         processed = false,
         id = ErrorGrabber.errorCount + 1,
     }
-    
+
     ErrorGrabber.errorCount = ErrorGrabber.errorCount + 1
-    
+
     -- Store in memory
     table.insert(ErrorGrabber.errors, entry)
-    
+
     -- Store in SavedVariables for AI agent access
     table.insert(MedaDebugErrors.errors, {
         message = entry.message,
@@ -55,12 +64,12 @@ local function MedaDebugErrorHandler(errorMessage)
         timestamp = entry.timestamp,
         datetime = entry.datetime,
     })
-    
+
     -- Limit SavedVariables size (keep last 500 errors)
     while #MedaDebugErrors.errors > 500 do
         table.remove(MedaDebugErrors.errors, 1)
     end
-    
+
     -- Notify UI if connected
     if ErrorGrabber.isReady and ErrorGrabber.onNewError then
         -- pcall to prevent errors in our error handler
@@ -73,7 +82,7 @@ local function MedaDebugErrorHandler(errorMessage)
             ErrorGrabber.lastChatError = timestamp
         end
     end
-    
+
     -- Chain to previous handler (BugSack, etc.)
     if previousHandler then
         pcall(previousHandler, errorMessage)
@@ -132,6 +141,74 @@ function ErrorGrabber:ClearErrors()
     wipe(self.errors)
     wipe(MedaDebugErrors.errors)
     self.errorCount = 0
+end
+
+-- BugGrabber integration - register as a listener if BugGrabber is present
+local function RegisterWithBugGrabber()
+    if not BugGrabber then return false end
+
+    -- BugGrabber callback for new errors
+    local function OnBugGrabberError(event, errorObject)
+        if not errorObject then return end
+
+        local timestamp = time()
+        local entry = {
+            message = errorObject.message or "Unknown error",
+            stack = errorObject.stack or "",
+            timestamp = timestamp,
+            datetime = date("%Y-%m-%d %H:%M:%S", timestamp),
+            processed = false,
+            id = ErrorGrabber.errorCount + 1,
+            fromBugGrabber = true,
+        }
+
+        ErrorGrabber.errorCount = ErrorGrabber.errorCount + 1
+
+        -- Store in memory
+        table.insert(ErrorGrabber.errors, entry)
+
+        -- Store in SavedVariables
+        table.insert(MedaDebugErrors.errors, {
+            message = entry.message,
+            stack = entry.stack,
+            timestamp = entry.timestamp,
+            datetime = entry.datetime,
+        })
+
+        -- Limit SavedVariables size
+        while #MedaDebugErrors.errors > 500 do
+            table.remove(MedaDebugErrors.errors, 1)
+        end
+
+        -- Notify UI if connected
+        if ErrorGrabber.isReady and ErrorGrabber.onNewError then
+            pcall(ErrorGrabber.onNewError, entry)
+        end
+    end
+
+    -- Register with BugGrabber
+    BugGrabber.RegisterCallback(ErrorGrabber, "BugGrabber_BugGrabbed", OnBugGrabberError)
+    ErrorGrabber.usingBugGrabber = true
+    return true
+end
+
+-- Try to register with BugGrabber now (if already loaded)
+if BugGrabber then
+    RegisterWithBugGrabber()
+else
+    -- Try again after ADDON_LOADED
+    local loader = CreateFrame("Frame")
+    loader:RegisterEvent("ADDON_LOADED")
+    loader:SetScript("OnEvent", function(self, event, addon)
+        if addon == "BugGrabber" or addon == "!BugGrabber" then
+            C_Timer.After(0, function()
+                if RegisterWithBugGrabber() then
+                    -- print("|cff00ff00[MedaDebug]|r Integrated with BugGrabber")
+                end
+            end)
+            self:UnregisterEvent("ADDON_LOADED")
+        end
+    end)
 end
 
 -- Debug: Print that grabber is loaded

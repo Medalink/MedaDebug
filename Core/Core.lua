@@ -35,11 +35,12 @@ local DEFAULT_DB = {
         -- Event Monitor
         eventCategories = {
             addon = true,
+            player = true,
+            ui = true,
             unit = false,
             combat = false,
             spell = false,
             bag = false,
-            ui = false,
         },
         eventThrottle = 10,
         maxEvents = 500,
@@ -456,6 +457,48 @@ function MedaDebug:LogInternal(addon, message, level)
     if self.API then
         self.API:Output(addon, message, level or "INFO")
     end
+end
+
+-- Reset all settings to defaults
+function MedaDebug:ResetToDefaults()
+    -- Wipe current DB
+    wipe(MedaDebugDB)
+
+    -- Deep copy DEFAULT_DB to MedaDebugDB
+    local function DeepCopy(src)
+        if type(src) ~= "table" then return src end
+        local copy = {}
+        for k, v in pairs(src) do
+            copy[k] = DeepCopy(v)
+        end
+        return copy
+    end
+
+    for k, v in pairs(DEFAULT_DB) do
+        MedaDebugDB[k] = DeepCopy(v)
+    end
+
+    -- Update reference
+    self.db = MedaDebugDB
+
+    -- Clear session log
+    if MedaDebugLog then
+        wipe(MedaDebugLog)
+        MedaDebugLog.session = {
+            messages = {},
+            errors = {},
+            events = {},
+            reloadCount = 0,
+            startTime = time(),
+        }
+        MedaDebugLog.persistent = {
+            messages = {},
+            errors = {},
+        }
+        self.log = MedaDebugLog
+    end
+
+    print("|cff00ff00[MedaDebug]|r Settings reset to defaults. Reload UI to apply all changes.")
 end
 
 -- ============================================================================

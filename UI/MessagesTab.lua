@@ -34,9 +34,9 @@ end
 
 function MessagesTab:RenderRow(row, data, index)
     if not data then return end
-    
+
     local Theme = MedaUI:GetTheme()
-    
+
     -- Create elements if needed
     if not row.timestamp then
         row.timestamp = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -52,40 +52,55 @@ function MessagesTab:RenderRow(row, data, index)
         row.addon:SetJustifyH("LEFT")
     end
 
+    if not row.count then
+        row.count = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.count:SetPoint("RIGHT", -8, 0)
+        row.count:SetWidth(50)
+        row.count:SetJustifyH("RIGHT")
+    end
+
     if not row.message then
         row.message = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.message:SetPoint("LEFT", row.addon, "RIGHT", 8, 0)
-        row.message:SetPoint("RIGHT", -8, 0)
+        row.message:SetPoint("RIGHT", row.count, "LEFT", -4, 0)
         row.message:SetJustifyH("LEFT")
         row.message:SetWordWrap(false)
     end
-    
+
     -- Check for reload separator
     if data.message:match("^%-%-%-") then
         row.timestamp:SetText("")
         row.addon:SetText("")
         row.message:SetText(data.message)
         row.message:SetTextColor(unpack(Theme.gold))
+        row.count:SetText("")
         row:SetBackdropColor(unpack(Theme.backgroundLight))
         return
     end
-    
+
     -- Set values
     row.timestamp:SetText(data.datetime or "")
     row.timestamp:SetTextColor(unpack(Theme.textDim))
-    
+
     row.addon:SetText("[" .. (data.addon or "?") .. "]")
     if data.addonColor then
         row.addon:SetTextColor(unpack(data.addonColor))
     else
         row.addon:SetTextColor(0.6, 0.8, 1)
     end
-    
+
     row.message:SetText(data.message or "")
     if data.levelColor then
         row.message:SetTextColor(unpack(data.levelColor))
     else
         row.message:SetTextColor(unpack(Theme.text))
+    end
+
+    -- Show count if 3 or more duplicates
+    if data.count and data.count >= 3 then
+        row.count:SetText("|cffFFAA00x" .. data.count .. "|r")
+    else
+        row.count:SetText("")
     end
 end
 
@@ -126,7 +141,7 @@ function MessagesTab:RefreshData()
     end
 end
 
-function MessagesTab:OnNewMessage(entry)
+function MessagesTab:OnNewMessage(entry, isUpdate)
     if not entry then
         -- Clear signal
         self:RefreshData()
@@ -147,7 +162,7 @@ function MessagesTab:OnNewMessage(entry)
         end
     end
 
-    -- Refresh to show new message at top (reversed order)
+    -- Refresh to show new message or updated count
     self:RefreshData()
 end
 

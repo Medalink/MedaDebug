@@ -23,6 +23,7 @@ local TABS = {
     {id = "events", label = "Events"},
     {id = "console", label = "Console"},
     {id = "inspector", label = "Inspect"},
+    {id = "secrets", label = "Secrets"},
     {id = "watch", label = "Watch"},
     {id = "timers", label = "Timers"},
     {id = "system", label = "Sys"},
@@ -34,9 +35,9 @@ function DebugFrame:Initialize()
     local Theme = MedaUI:GetTheme()
     
     -- Create main panel
-    self.frame = MedaUI:CreatePanel("MedaDebugFrame", 700, 500, "MedaDebug")
+    self.frame = MedaUI:CreatePanel("MedaDebugFrame", 800, 500, "MedaDebug")
     self.frame:SetResizable(true, {
-        minWidth = 500,
+        minWidth = 650,
         minHeight = 400,
     })
 
@@ -213,20 +214,19 @@ function DebugFrame:Initialize()
         MedaDebug:LogInternal("MedaDebug", string.format("Garbage collected: %.1f KB freed", freed), "INFO")
     end)
 
-    -- Copy button - copies messages between reloads
+    -- Copy button - copies current tab content
     local copyBtn = MedaUI:CreateButton(self.quickActions, "Copy", 50, 26)
     copyBtn:SetPoint("LEFT", gcBtn, "RIGHT", 8, 0)
     copyBtn:SetScript("OnEnter", function(btn)
         GameTooltip:SetOwner(btn, "ANCHOR_TOP")
-        GameTooltip:SetText("Copy messages between reloads")
-        GameTooltip:AddLine("Copies timestamp + message only", 0.7, 0.7, 0.7)
+        GameTooltip:SetText("Copy current tab data")
         GameTooltip:Show()
     end)
     copyBtn:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
     copyBtn:SetScript("OnClick", function()
-        self:CopyMessagesForAI()
+        self:CopyCurrentTab()
     end)
     
     -- Settings button (right side)
@@ -391,6 +391,9 @@ function DebugFrame:CreateTabContent(tabId)
     elseif tabId == "inspector" and MedaDebug.InspectorTab then
         MedaDebug.InspectorTab:Initialize(tabFrame)
         module = MedaDebug.InspectorTab
+    elseif tabId == "secrets" and MedaDebug.SecretsTab then
+        MedaDebug.SecretsTab:Initialize(tabFrame)
+        module = MedaDebug.SecretsTab
     elseif tabId == "watch" and MedaDebug.WatchTab then
         MedaDebug.WatchTab:Initialize(tabFrame)
         module = MedaDebug.WatchTab
@@ -511,10 +514,23 @@ function DebugFrame:IsShown()
     return self.frame and self.frame:IsShown()
 end
 
-function DebugFrame:CopyMessagesForAI()
+function DebugFrame:CopyCurrentTab()
+    local currentTab = self.tabContents[self.activeTab]
+
+    -- If current tab has a Copy function, use it
+    if currentTab and currentTab.Copy then
+        currentTab:Copy()
+        return
+    end
+
+    -- Default: copy messages
+    self:CopyMessages()
+end
+
+function DebugFrame:CopyMessages()
     if not MedaDebug.OutputManager then return end
 
-    local text = MedaDebug.OutputManager:GetMessagesForAI()
+    local text = MedaDebug.OutputManager:GetMessagesForCopy()
 
     -- Use MedaUI's shared TextViewer
     MedaUI:ShowTextViewer("Messages - Press Ctrl+C to copy", text)

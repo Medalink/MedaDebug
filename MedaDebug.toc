@@ -24,6 +24,7 @@ Core\SystemMonitor.lua
 Core\EventMonitor.lua
 Core\FrameInspector.lua
 Core\VariableWatch.lua
+Core\SecretsExplorer.lua
 Core\SVDiff.lua
 Core\TimerTracker.lua
 
@@ -36,6 +37,7 @@ UI\ErrorsTab.lua
 UI\EventsTab.lua
 UI\ConsoleTab.lua
 UI\InspectorTab.lua
+UI\SecretsTab.lua
 UI\WatchTab.lua
 UI\TimersTab.lua
 UI\SystemTab.lua

@@ -23,6 +23,24 @@ local ERROR_PATTERNS = {
     {type = "INVALID_ARGUMENT", pattern = "bad argument #(%d+)", hint = "Wrong argument type to function (arg #%s)"},
     {type = "SECURE_HOOK", pattern = "Cannot call.-in combat", hint = "Protected function called in combat - queue for after combat"},
     {type = "TAINT", pattern = "Action.*was blocked", hint = "Tainted code execution - check for secure frame modifications"},
+
+    -- Secrets-related errors (WoW 12.0.0+)
+    {type = "SECRET_ARITHMETIC", pattern = "attempt to perform arithmetic on.-secret",
+     hint = "Cannot do math on secret values - use issecretvalue() to check first, or pass to Blizzard API unchanged"},
+    {type = "SECRET_COMPARE", pattern = "attempt to compare.-secret",
+     hint = "Cannot compare secret values - pass to Blizzard APIs or use for display only (concatenation OK)"},
+    {type = "SECRET_BOOLEAN", pattern = "attempt to.-boolean.-secret",
+     hint = "Cannot use secret in if/and/or - check with issecretvalue() before conditional logic"},
+    {type = "SECRET_LENGTH", pattern = "attempt to get length of.-secret",
+     hint = "Cannot use # on secret values - the length itself would reveal information"},
+    {type = "SECRET_INDEX", pattern = "attempt to index.-secret",
+     hint = "Cannot index into secret values - if you need table access, check canaccesstable() first"},
+    {type = "SECRET_KEY", pattern = "secret.-as table key",
+     hint = "Cannot use secret as table key - store by a non-secret identifier instead"},
+    {type = "SECRET_CALL", pattern = "attempt to call.-secret",
+     hint = "Secret value is not callable - it's data, not a function"},
+    {type = "SECRET_ACCESS", pattern = "cannot access secret",
+     hint = "Tainted code cannot access this secret - check canaccessvalue() or use in untainted context"},
 }
 
 -- Addon detection patterns
@@ -68,7 +86,14 @@ local function ClassifyError(message)
             if match1 and hint:find("%%s") then
                 hint = hint:format(match1)
             end
-            return pattern.type, hint
+
+            -- Add link to secrets tab for SECRET_* errors
+            local errorType = pattern.type
+            if errorType:match("^SECRET_") and MedaDebug.SecretsExplorer then
+                hint = hint .. " | Use /mdebug secrets to explore what's secret"
+            end
+
+            return errorType, hint
         end
     end
     return "UNKNOWN", "Unknown error type - inspect stack trace"

@@ -34,14 +34,30 @@ end
 --- Handle a new message
 --- @param entry table Message entry {timestamp, datetime, addon, level, message, levelColor, addonColor}
 function OutputManager:HandleMessage(entry)
-    -- Add to messages
+    -- Check if this is a duplicate of the last message (same addon, level, and message)
+    local lastMsg = self.messages[#self.messages]
+    if lastMsg and lastMsg.addon == entry.addon and lastMsg.level == entry.level and lastMsg.message == entry.message then
+        -- Increment count on existing message
+        lastMsg.count = (lastMsg.count or 1) + 1
+        lastMsg.lastTimestamp = entry.timestamp
+        lastMsg.lastDatetime = entry.datetime
+
+        -- Notify UI of update (pass the updated message)
+        if self.onNewMessage then
+            self.onNewMessage(lastMsg, true)  -- true = update existing
+        end
+        return
+    end
+
+    -- New unique message
+    entry.count = 1
     self.messages[#self.messages + 1] = entry
-    
+
     -- Trim if over limit
     while #self.messages > self.maxMessages do
         table.remove(self.messages, 1)
     end
-    
+
     -- Save to session log
     if MedaDebug.log and MedaDebug.log.session then
         MedaDebug.log.session.messages[#MedaDebug.log.session.messages + 1] = {
@@ -51,14 +67,14 @@ function OutputManager:HandleMessage(entry)
             level = entry.level,
             message = entry.message,
         }
-        
+
         -- Trim session log
         local maxLog = MedaDebug.db and MedaDebug.db.options.maxLogEntries or 5000
         while #MedaDebug.log.session.messages > maxLog do
             table.remove(MedaDebug.log.session.messages, 1)
         end
     end
-    
+
     -- Output to chat if enabled
     if MedaDebug.db and MedaDebug.db.options.outputToChat then
         local color = entry.levelColor or {1, 1, 1}
@@ -66,7 +82,7 @@ function OutputManager:HandleMessage(entry)
         local prefix = string.format("|cff%02x%02x%02x[%s]|r", r*255, g*255, b*255, entry.addon)
         print(prefix .. " " .. entry.message)
     end
-    
+
     -- Notify UI
     if self.onNewMessage then
         self.onNewMessage(entry)
@@ -166,9 +182,9 @@ function OutputManager:GetAddonsFromMessages()
 end
 
 --- Get messages from current session for copying
---- Formatted for AI: just timestamp and message, no addon/channel
+--- Formatted with just timestamp and message, no addon/channel
 --- @return string Formatted text ready for copying
-function OutputManager:GetMessagesForAI()
+function OutputManager:GetMessagesForCopy()
     local messages = self.messages
     if #messages == 0 then
         return "No messages found."
@@ -226,7 +242,11 @@ function OutputManager:GetMessagesForAI()
             -- Skip reload separators in output
             if not msg.message:match("^%-%-%-") then
                 local timestamp = msg.datetime or ""
-                lines[#lines + 1] = timestamp .. " " .. msg.message
+                local countSuffix = ""
+                if msg.count and msg.count > 1 then
+                    countSuffix = " (x" .. msg.count .. ")"
+                end
+                lines[#lines + 1] = timestamp .. " " .. msg.message .. countSuffix
             end
         end
     end

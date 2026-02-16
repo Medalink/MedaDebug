@@ -188,7 +188,10 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if MedaDebug.OutputManager and MedaDebug.OutputManager.Initialize then
             MedaDebug.OutputManager:Initialize()
         end
-        
+        if MedaDebug.FrameInspector and MedaDebug.FrameInspector.Initialize then
+            MedaDebug.FrameInspector:Initialize()
+        end
+
         -- Initialize optional real-time monitors (check enabled flags)
         if MedaDebug.db.options.enableSystemMonitor then
             if MedaDebug.SystemMonitor and MedaDebug.SystemMonitor.Initialize then

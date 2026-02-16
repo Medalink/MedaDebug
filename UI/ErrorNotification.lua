@@ -11,6 +11,12 @@ MedaDebug.ErrorNotification = ErrorNotification
 
 ErrorNotification.frame = nil
 ErrorNotification.errorCount = 0
+local DEFAULT_ERROR_ICON_TEXTURE = "Interface\\AddOns\\MedaDebug\\Media\\debug@2x"
+
+function ErrorNotification:GetIconTexture()
+    -- Error notification always uses the high-quality 2x icon asset.
+    return DEFAULT_ERROR_ICON_TEXTURE
+end
 
 function ErrorNotification:Initialize()
     if self.frame then return end
@@ -48,7 +54,7 @@ function ErrorNotification:Initialize()
     -- Icon texture
     frame.icon = frame:CreateTexture(nil, "BACKGROUND")
     frame.icon:SetAllPoints()
-    frame.icon:SetTexture("Interface\\AddOns\\MedaDebug\\Media\\debug")
+    frame.icon:SetTexture(self:GetIconTexture())
     
     -- Badge background (red circle)
     frame.badgeBg = frame:CreateTexture(nil, "OVERLAY")
@@ -205,6 +211,9 @@ function ErrorNotification:ApplySettings()
     
     -- Apply size
     self.frame:SetSize(settings.size, settings.size)
+
+    -- Keep icon synced with the currently configured minimap icon texture.
+    self.frame.icon:SetTexture(self:GetIconTexture())
     
     -- Scale badge proportionally
     local badgeScale = settings.size / 64

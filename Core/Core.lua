@@ -183,6 +183,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         end
         
     elseif event == "PLAYER_LOGIN" then
+        -- Suppress Blizzard error popups immediately, before anything else can throw
+        MedaDebug:TameBlizzardErrors()
+        
         -- Initialize core modules (always enabled)
         if MedaDebug.ErrorHandler and MedaDebug.ErrorHandler.Initialize then
             MedaDebug.ErrorHandler:Initialize()
@@ -300,9 +303,6 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                     end
                 end
             end
-            
-            -- Tame Blizzard's error popup
-            MedaDebug:TameBlizzardErrors()
         end)
         
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -592,12 +592,29 @@ end
 function MedaDebug:TameBlizzardErrors()
     if not self.db.options.tameBlizzardErrors then return end
 
-    -- Hide Blizzard's error frame entirely (no blocking, no sound)
+    -- Fully neuter Blizzard's per-error frame so it can never show or play sounds
     local blizzFrame = _G.ScriptErrorsFrame or _G.BasicScriptErrors
     if blizzFrame then
-        blizzFrame:SetScript("OnShow", function(frame)
-            frame:Hide()
-        end)
+        blizzFrame:SetScript("OnShow", nil)
+        blizzFrame:SetScript("OnEvent", nil)
+        blizzFrame:UnregisterAllEvents()
+        blizzFrame:Hide()
+        blizzFrame.Show = function() end
+    end
+
+    -- Suppress the "too many errors" and "action forbidden" static popups
+    if StaticPopupDialogs then
+        for _, key in ipairs({
+            "TOO_MANY_LUA_ERRORS",
+            "ADDON_ACTION_FORBIDDEN",
+        }) do
+            StaticPopupDialogs[key] = {
+                button1 = "",
+                button2 = "",
+                OnShow = function(self) self:Hide() end,
+            }
+            pcall(StaticPopup_Hide, key)
+        end
     end
 
     -- Create a minimal floating text notice (no background, no bar)

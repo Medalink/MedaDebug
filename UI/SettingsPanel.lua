@@ -195,7 +195,7 @@ function SettingsPanel:Initialize()
     yPos = yPos - 24
     
     -- Tame Blizzard error popup
-    local tameCheckbox = MedaUI:CreateCheckbox(content, "Tame Blizzard error popup (move to top, mute sound)")
+    local tameCheckbox = MedaUI:CreateCheckbox(content, "Hide Blizzard error popup (show slim error bar instead)")
     tameCheckbox:SetPoint("TOPLEFT", 12, yPos)
     tameCheckbox:SetChecked(MedaDebug.db.options.tameBlizzardErrors)
     tameCheckbox.OnValueChanged = function(_, checked)

@@ -193,6 +193,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if MedaDebug.FrameInspector and MedaDebug.FrameInspector.Initialize then
             MedaDebug.FrameInspector:Initialize()
         end
+        if MedaDebug.SecretsExplorer and MedaDebug.SecretsExplorer.Initialize then
+            MedaDebug.SecretsExplorer:Initialize()
+        end
 
         -- Initialize optional real-time monitors (check enabled flags)
         if MedaDebug.db.options.enableSystemMonitor then
@@ -245,6 +248,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                             local count = MedaDebug.ErrorHandler:GetVisibleErrorCount()
                             MedaDebug.ErrorNotification:UpdateCount(count)
                         end
+                        MedaDebug:UpdateErrorBar()
                         -- Call original handler (DebugFrame)
                         if originalOnNewError then
                             originalOnNewError(entry)
@@ -258,6 +262,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                             local count = MedaDebug.ErrorHandler:GetVisibleErrorCount()
                             MedaDebug.ErrorNotification:UpdateCount(count)
                         end
+                        MedaDebug:UpdateErrorBar()
                         -- Call original handler
                         if originalOnErrorUpdated then
                             originalOnErrorUpdated(entry)
@@ -277,6 +282,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                         if MedaDebug.ErrorsTab and MedaDebug.ErrorsTab.RefreshData then
                             MedaDebug.ErrorsTab:RefreshData()
                         end
+                        MedaDebug:UpdateErrorBar()
                     end
                     
                     MedaDebug.ErrorHandler.onSuppressChanged = function()
@@ -290,6 +296,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                         if MedaDebug.ErrorsTab and MedaDebug.ErrorsTab.RefreshData then
                             MedaDebug.ErrorsTab:RefreshData()
                         end
+                        MedaDebug:UpdateErrorBar()
                     end
                 end
             end
@@ -411,6 +418,12 @@ function MedaDebug:HandleSlashCommand(msg)
             self.DebugFrame:SetActiveTab("system")
         end
         
+    elseif cmd == "secrets" then
+        if self.DebugFrame then
+            self.DebugFrame:Show()
+            self.DebugFrame:SetActiveTab("secrets")
+        end
+        
     elseif cmd == "clear" then
         if rest == "all" then
             if self.OutputManager then self.OutputManager:ClearAll() end
@@ -454,7 +467,7 @@ function MedaDebug:HandleSlashCommand(msg)
         print("  /mdebug - Toggle debug frame")
         print("  /mdebug settings - Open settings")
         print("  /mdebug dev - Toggle development mode")
-        print("  /mdebug msgs|errors|events|console|inspect|watch|timers|system - Show tab")
+        print("  /mdebug msgs|errors|events|console|inspect|watch|timers|system|secrets - Show tab")
         print("  /mdebug clear [all] - Clear messages")
         print("  /mdebug run <code> - Execute Lua code")
         print("  /mdebug var <path> - Watch variable")
@@ -579,30 +592,61 @@ end
 function MedaDebug:TameBlizzardErrors()
     if not self.db.options.tameBlizzardErrors then return end
 
+    -- Hide Blizzard's error frame entirely (no blocking, no sound)
     local blizzFrame = _G.ScriptErrorsFrame or _G.BasicScriptErrors
-    if not blizzFrame then return end
-
-    -- Reposition to top of screen and lock it there
-    blizzFrame:ClearAllPoints()
-    blizzFrame:SetPoint("TOP", UIParent, "TOP", 0, -20)
-
-    local origOnShow = blizzFrame:GetScript("OnShow")
-    blizzFrame:SetScript("OnShow", function(frame, ...)
-        -- Lock position every time Blizzard tries to recenter
-        frame:ClearAllPoints()
-        frame:SetPoint("TOP", UIParent, "TOP", 0, -20)
-
-        -- Mute the error sound by temporarily replacing PlaySound
-        local realPlaySound = PlaySound
-        PlaySound = function() end
-        C_Timer.After(0, function()
-            PlaySound = realPlaySound
+    if blizzFrame then
+        blizzFrame:SetScript("OnShow", function(frame)
+            frame:Hide()
         end)
+    end
 
-        if origOnShow then
-            origOnShow(frame, ...)
+    -- Create a minimal floating text notice (no background, no bar)
+    local notice = CreateFrame("Button", "MedaDebugErrorBar", UIParent)
+    notice:SetHeight(20)
+    notice:SetPoint("TOP", UIParent, "TOP", 0, -4)
+    notice:SetFrameStrata("HIGH")
+    notice:Hide()
+
+    notice.text = notice:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    notice.text:SetPoint("CENTER")
+    notice.text:SetTextColor(0.7, 0.7, 0.7)
+    notice.text:SetShadowOffset(1, -1)
+    notice.text:SetShadowColor(0, 0, 0, 0.8)
+    notice:SetWidth(400)
+
+    notice:SetScript("OnClick", function()
+        if MedaDebug.DebugFrame then
+            MedaDebug.DebugFrame:Show()
+            MedaDebug.DebugFrame:SetActiveTab("errors")
         end
     end)
+
+    notice:SetScript("OnEnter", function(self)
+        self.text:SetTextColor(1, 0.8, 0.5)
+    end)
+    notice:SetScript("OnLeave", function(self)
+        self.text:SetTextColor(0.7, 0.7, 0.7)
+    end)
+
+    self.errorBar = notice
+end
+
+function MedaDebug:UpdateErrorBar()
+    if not self.errorBar or not self.db.options.tameBlizzardErrors then return end
+    if not self.ErrorHandler then return end
+
+    local count = self.ErrorHandler:GetVisibleErrorCount()
+    if count > 0 then
+        self.errorBar.text:SetText(count .. " addon error(s) thrown \226\128\148 click or /mdebug errors to inspect")
+        self.errorBar:Show()
+
+        if self.errorBarTimer then self.errorBarTimer:Cancel() end
+        self.errorBarTimer = C_Timer.NewTimer(5, function()
+            if self.errorBar then self.errorBar:Hide() end
+        end)
+    else
+        self.errorBar:Hide()
+    end
 end
 
 -- Show/hide minimap button

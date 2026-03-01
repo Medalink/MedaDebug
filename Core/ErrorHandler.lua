@@ -25,22 +25,25 @@ local ERROR_PATTERNS = {
     {type = "TAINT", pattern = "Action.*was blocked", hint = "Tainted code execution - check for secure frame modifications"},
 
     -- Secrets-related errors (WoW 12.0.0+)
+    -- Hints updated with empirical findings from Midnight 12.0 testing
     {type = "SECRET_ARITHMETIC", pattern = "attempt to perform arithmetic on.-secret",
-     hint = "Cannot do math on secret values - use issecretvalue() to check first, or pass to Blizzard API unchanged"},
+     hint = "Cannot do math on secret values. Use issecretvalue() or pcall to detect first. Note: UnitPowerMax(unit,type,true) may still be readable even when UnitPower is secret"},
     {type = "SECRET_COMPARE", pattern = "attempt to compare.-secret",
-     hint = "Cannot compare secret values - pass to Blizzard APIs or use for display only (concatenation OK)"},
+     hint = "Cannot compare secret values. WARNING: tostring(secret) returns a secret STRING that taints everything it touches via concat. Use pcall + forced comparison to verify strings are clean before embedding in messages"},
     {type = "SECRET_BOOLEAN", pattern = "attempt to.-boolean.-secret",
-     hint = "Cannot use secret in if/and/or - check with issecretvalue() before conditional logic"},
+     hint = "Cannot branch on tainted boolean. Comparisons on secret numbers may return tainted booleans that crash if/and/or. Wrap in pcall and use issecretvalue() before conditional logic"},
     {type = "SECRET_LENGTH", pattern = "attempt to get length of.-secret",
      hint = "Cannot use # on secret values - the length itself would reveal information"},
     {type = "SECRET_INDEX", pattern = "attempt to index.-secret",
      hint = "Cannot index into secret values - if you need table access, check canaccesstable() first"},
     {type = "SECRET_KEY", pattern = "secret.-as table key",
-     hint = "Cannot use secret as table key - store by a non-secret identifier instead"},
+     hint = "Cannot use secret as table key - store by a non-secret identifier (e.g., unit token or GUID) instead"},
     {type = "SECRET_CALL", pattern = "attempt to call.-secret",
      hint = "Secret value is not callable - it's data, not a function"},
     {type = "SECRET_ACCESS", pattern = "cannot access secret",
      hint = "Tainted code cannot access this secret - check canaccessvalue() or use in untainted context"},
+    {type = "SECRET_STRING", pattern = "secret string value",
+     hint = "This is a secret STRING (often from tostring(secretNumber)). Taint propagates through concatenation silently - the string looks normal but crashes on compare/find/match/sub. Verify with pcall comparison before use"},
 }
 
 -- Addon detection patterns

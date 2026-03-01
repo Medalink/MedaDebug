@@ -350,8 +350,8 @@ function SecretsTab:DisplaySearchResults(results)
     local yPos = -4
     local rowHeight = 50
 
-    -- Test units
-    local testUnits = {"player", "target"}
+    -- Test with relevant units for better coverage
+    local testUnits = {"player", "target", "party1"}
 
     for i, result in ipairs(results) do
         if i > 10 then
@@ -399,7 +399,7 @@ function SecretsTab:DisplaySearchResults(results)
                 local unitLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
                 unitLabel:SetPoint("TOPLEFT", xPos, resultY)
 
-                local statusColor = "|cff00ff00" -- Green - full access
+                local statusColor = "|cff00ff00"
                 local statusText = "OK"
 
                 if unitResult.error then
@@ -418,10 +418,24 @@ function SecretsTab:DisplaySearchResults(results)
                     displayValue = displayValue:sub(1, 15) .. ".."
                 end
 
-                unitLabel:SetText(unit .. ": " .. statusColor .. statusText .. "|r " .. displayValue)
+                local labelStr = unit .. ": " .. statusColor .. statusText .. "|r " .. displayValue
+
+                -- Show taint behavior for secret values
+                if unitResult.taintBehavior then
+                    local tb = unitResult.taintBehavior
+                    local taintParts = {}
+                    if tb.tostring then taintParts[#taintParts + 1] = "str:" .. tb.tostring end
+                    if tb.compare then taintParts[#taintParts + 1] = "cmp:" .. tb.compare end
+                    if tb.arithmetic then taintParts[#taintParts + 1] = "math:" .. tb.arithmetic end
+                    if #taintParts > 0 then
+                        labelStr = labelStr .. " |cff666666[" .. table.concat(taintParts, " ") .. "]|r"
+                    end
+                end
+
+                unitLabel:SetText(labelStr)
                 unitLabel:SetTextColor(unpack(Theme.textDim))
 
-                xPos = xPos + 160
+                xPos = xPos + 220
             end
         end
 

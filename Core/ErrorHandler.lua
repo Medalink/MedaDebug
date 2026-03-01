@@ -255,14 +255,21 @@ function ErrorHandler:ProcessError(rawEntry)
     
     -- Check for duplicate (group)
     local signature = CreateSignature(entry)
+    entry.signature = signature
+    
+    -- Check if this error signature is suppressed
+    local isSuppressed = MedaDebug.db and MedaDebug.db.suppressedSignatures
+        and MedaDebug.db.suppressedSignatures[signature] or false
+    entry.suppressed = isSuppressed
+    
     if self.errorGroups[signature] then
         -- Increment existing
         local existing = self.errorGroups[signature]
         existing.occurrences.count = existing.occurrences.count + 1
         existing.occurrences.lastSeen = rawEntry.timestamp
         
-        -- Notify UI of update
-        if self.onErrorUpdated then
+        -- Only notify UI if not suppressed
+        if not existing.suppressed and self.onErrorUpdated then
             self.onErrorUpdated(existing)
         end
     else
@@ -290,8 +297,8 @@ function ErrorHandler:ProcessError(rawEntry)
             }
         end
         
-        -- Output to chat if enabled
-        if MedaDebug.db and MedaDebug.db.options.outputToChat then
+        -- Output to chat if enabled (skip for suppressed)
+        if not isSuppressed and MedaDebug.db and MedaDebug.db.options.outputToChat then
             print(string.format("|cffff4444[Error]|r |cff88bbff[%s]|r %s in %s:%d", 
                 entry.summary.sourceAddon,
                 entry.summary.type,
@@ -300,8 +307,8 @@ function ErrorHandler:ProcessError(rawEntry)
             print("  └─ " .. entry.summary.hint)
         end
         
-        -- Notify UI of new error
-        if self.onNewError then
+        -- Only notify UI if not suppressed (skip notification icon + badge)
+        if not isSuppressed and self.onNewError then
             self.onNewError(entry)
         end
     end
@@ -329,6 +336,80 @@ function ErrorHandler:GetTotalOccurrences()
         total = total + err.occurrences.count
     end
     return total
+end
+
+--- Get count of non-suppressed errors (used by notification icon and badge)
+--- @return number
+function ErrorHandler:GetVisibleErrorCount()
+    local count = 0
+    for _, err in ipairs(self.errors) do
+        if not err.suppressed then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+--- Get count of suppressed errors
+--- @return number
+function ErrorHandler:GetSuppressedErrorCount()
+    local count = 0
+    for _, err in ipairs(self.errors) do
+        if err.suppressed then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+--- Check if an error entry is suppressed
+--- @param entry table Error entry
+--- @return boolean
+function ErrorHandler:IsErrorSuppressed(entry)
+    if not entry or not entry.signature then return false end
+    return MedaDebug.db and MedaDebug.db.suppressedSignatures
+        and MedaDebug.db.suppressedSignatures[entry.signature] or false
+end
+
+--- Suppress an error by its signature
+--- @param entry table Error entry to suppress
+function ErrorHandler:SuppressError(entry)
+    if not entry or not entry.signature then return end
+    if not MedaDebug.db then return end
+
+    MedaDebug.db.suppressedSignatures[entry.signature] = true
+    entry.suppressed = true
+
+    -- Also suppress any grouped duplicates with the same signature
+    for _, err in ipairs(self.errors) do
+        if err.signature == entry.signature then
+            err.suppressed = true
+        end
+    end
+
+    if self.onSuppressChanged then
+        self.onSuppressChanged()
+    end
+end
+
+--- Unsuppress an error by its signature
+--- @param entry table Error entry to unsuppress
+function ErrorHandler:UnsuppressError(entry)
+    if not entry or not entry.signature then return end
+    if not MedaDebug.db then return end
+
+    MedaDebug.db.suppressedSignatures[entry.signature] = nil
+    entry.suppressed = false
+
+    for _, err in ipairs(self.errors) do
+        if err.signature == entry.signature then
+            err.suppressed = false
+        end
+    end
+
+    if self.onSuppressChanged then
+        self.onSuppressChanged()
+    end
 end
 
 --- Clear all errors

@@ -71,7 +71,9 @@ local DEFAULT_DB = {
             size = 64,      -- 32-128 range
             opacity = 1.0,  -- 0.3-1.0 range
         },
+        tameBlizzardErrors = true,
     },
+    suppressedSignatures = {},
     registeredAddons = {},
     minimapButton = { hide = false },
     bookmarks = {},
@@ -238,9 +240,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 if MedaDebug.ErrorHandler then
                     local originalOnNewError = MedaDebug.ErrorHandler.onNewError
                     MedaDebug.ErrorHandler.onNewError = function(entry)
-                        -- Update notification
+                        -- Update notification (visible count only)
                         if MedaDebug.ErrorNotification then
-                            local count = MedaDebug.ErrorHandler:GetErrorCount()
+                            local count = MedaDebug.ErrorHandler:GetVisibleErrorCount()
                             MedaDebug.ErrorNotification:UpdateCount(count)
                         end
                         -- Call original handler (DebugFrame)
@@ -251,9 +253,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                     
                     local originalOnErrorUpdated = MedaDebug.ErrorHandler.onErrorUpdated
                     MedaDebug.ErrorHandler.onErrorUpdated = function(entry)
-                        -- Update notification count (occurrences changed)
+                        -- Update notification count (visible only)
                         if MedaDebug.ErrorNotification then
-                            local count = MedaDebug.ErrorHandler:GetErrorCount()
+                            local count = MedaDebug.ErrorHandler:GetVisibleErrorCount()
                             MedaDebug.ErrorNotification:UpdateCount(count)
                         end
                         -- Call original handler
@@ -276,8 +278,24 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                             MedaDebug.ErrorsTab:RefreshData()
                         end
                     end
+                    
+                    MedaDebug.ErrorHandler.onSuppressChanged = function()
+                        if MedaDebug.ErrorNotification then
+                            local count = MedaDebug.ErrorHandler:GetVisibleErrorCount()
+                            MedaDebug.ErrorNotification:UpdateCount(count)
+                        end
+                        if MedaDebug.DebugFrame and MedaDebug.DebugFrame.UpdateErrorBadge then
+                            MedaDebug.DebugFrame:UpdateErrorBadge()
+                        end
+                        if MedaDebug.ErrorsTab and MedaDebug.ErrorsTab.RefreshData then
+                            MedaDebug.ErrorsTab:RefreshData()
+                        end
+                    end
                 end
             end
+            
+            -- Tame Blizzard's error popup
+            MedaDebug:TameBlizzardErrors()
         end)
         
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -552,6 +570,39 @@ function MedaDebug:InitializeMinimapButton()
             end
         end
     end
+end
+
+-- ============================================================================
+-- Tame Blizzard Error Popup
+-- ============================================================================
+
+function MedaDebug:TameBlizzardErrors()
+    if not self.db.options.tameBlizzardErrors then return end
+
+    local blizzFrame = _G.ScriptErrorsFrame or _G.BasicScriptErrors
+    if not blizzFrame then return end
+
+    -- Reposition to top of screen and lock it there
+    blizzFrame:ClearAllPoints()
+    blizzFrame:SetPoint("TOP", UIParent, "TOP", 0, -20)
+
+    local origOnShow = blizzFrame:GetScript("OnShow")
+    blizzFrame:SetScript("OnShow", function(frame, ...)
+        -- Lock position every time Blizzard tries to recenter
+        frame:ClearAllPoints()
+        frame:SetPoint("TOP", UIParent, "TOP", 0, -20)
+
+        -- Mute the error sound by temporarily replacing PlaySound
+        local realPlaySound = PlaySound
+        PlaySound = function() end
+        C_Timer.After(0, function()
+            PlaySound = realPlaySound
+        end)
+
+        if origOnShow then
+            origOnShow(frame, ...)
+        end
+    end)
 end
 
 -- Show/hide minimap button

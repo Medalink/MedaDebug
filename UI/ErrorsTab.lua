@@ -17,6 +17,17 @@ function ErrorsTab:Initialize(parent)
     self.frame = parent
     local Theme = MedaUI:GetTheme()
     
+    -- Suppressed count status bar at top
+    self.statusBar = CreateFrame("Frame", nil, parent)
+    self.statusBar:SetHeight(20)
+    self.statusBar:SetPoint("TOPLEFT", 0, 0)
+    self.statusBar:SetPoint("TOPRIGHT", 0, 0)
+    self.statusBar:Hide()
+    
+    self.statusText = self.statusBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.statusText:SetPoint("LEFT", 10, 0)
+    self.statusText:SetTextColor(unpack(Theme.textDim))
+    
     -- Create scroll list with taller rows for expanded view
     self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight(), {
         rowHeight = 56,
@@ -61,7 +72,7 @@ function ErrorsTab:RenderRow(row, data, index)
     if not row.mainText then
         row.mainText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.mainText:SetPoint("TOPLEFT", 10, -10)
-        row.mainText:SetPoint("TOPRIGHT", -120, -10)
+        row.mainText:SetPoint("TOPRIGHT", -150, -10)
         row.mainText:SetJustifyH("LEFT")
         row.mainText:SetWordWrap(false)
     end
@@ -69,14 +80,26 @@ function ErrorsTab:RenderRow(row, data, index)
     if not row.hintText then
         row.hintText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.hintText:SetPoint("TOPLEFT", 24, -30)
-        row.hintText:SetPoint("TOPRIGHT", -120, -30)
+        row.hintText:SetPoint("TOPRIGHT", -150, -30)
         row.hintText:SetJustifyH("LEFT")
         row.hintText:SetWordWrap(false)
     end
     
     if not row.countText then
         row.countText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.countText:SetPoint("TOPRIGHT", -60, -8)
+        row.countText:SetPoint("TOPRIGHT", -90, -8)
+    end
+    
+    if not row.suppressBtn then
+        row.suppressBtn = MedaUI:CreateIconButton(row, {
+            size = 18,
+            icon = "Interface\\Buttons\\UI-GuildButton-PublicNote-Up",
+            iconActive = "Interface\\Buttons\\UI-GuildButton-PublicNote-Disabled",
+            tooltip = "Suppress this error",
+            tooltipActive = "Unsuppress this error",
+            toggle = true,
+        })
+        row.suppressBtn:SetPoint("TOPRIGHT", -62, -8)
     end
     
     if not row.copyBtn then
@@ -96,21 +119,46 @@ function ErrorsTab:RenderRow(row, data, index)
     local sourceLine = summary.sourceLine or 0
     local hint = summary.hint or "No hint available"
     local count = (data.occurrences and data.occurrences.count) or 1
+    local isSuppressed = data.suppressed or false
     
     -- Main line: [!] [Addon] TYPE in file:line
-    local mainLine = string.format("|cffff4444[!]|r |cff88bbff[%s]|r %s in %s:%d", 
-        addonName, errorType, sourceFile, sourceLine)
+    local mainLine
+    if isSuppressed then
+        mainLine = string.format("|cff666666[S]|r |cff556677[%s]|r %s in %s:%d",
+            addonName, errorType, sourceFile, sourceLine)
+    else
+        mainLine = string.format("|cffff4444[!]|r |cff88bbff[%s]|r %s in %s:%d",
+            addonName, errorType, sourceFile, sourceLine)
+    end
     row.mainText:SetText(mainLine)
     
     -- Hint line
-    row.hintText:SetText("|cff888888> " .. hint .. "|r")
+    if isSuppressed then
+        row.hintText:SetText("|cff555555> " .. hint .. "|r")
+    else
+        row.hintText:SetText("|cff888888> " .. hint .. "|r")
+    end
     
     -- Count
     row.countText:SetText("(x" .. count .. ")")
-    if count > 1 then
+    if isSuppressed then
+        row.countText:SetTextColor(0.4, 0.4, 0.4)
+    elseif count > 1 then
         row.countText:SetTextColor(unpack(Theme.levelWarn))
     else
         row.countText:SetTextColor(unpack(Theme.textDim))
+    end
+    
+    -- Suppress button state
+    row.suppressBtn:SetActive(isSuppressed)
+    row.suppressBtn.OnClick = function(btn, mouseBtn, isActive)
+        if MedaDebug.ErrorHandler then
+            if isActive then
+                MedaDebug.ErrorHandler:SuppressError(data)
+            else
+                MedaDebug.ErrorHandler:UnsuppressError(data)
+            end
+        end
     end
     
     -- Copy button
@@ -124,6 +172,9 @@ function ErrorsTab:RenderRow(row, data, index)
     row.copyBtn:SetScript("OnLeave", function(btn)
         btn.text:SetTextColor(unpack(Theme.textDim))
     end)
+    
+    -- Dim the whole row when suppressed
+    row:SetAlpha(isSuppressed and 0.6 or 1.0)
     
     -- Row click to select
     row:EnableMouse(true)
@@ -145,6 +196,19 @@ function ErrorsTab:RefreshData()
     local errors = MedaDebug.ErrorHandler:GetErrors()
     self.scrollList:SetData(errors)
     self.scrollList:Refresh()
+    
+    -- Update suppressed count status bar
+    if self.statusBar then
+        local suppressed = MedaDebug.ErrorHandler:GetSuppressedErrorCount()
+        if suppressed > 0 then
+            self.statusText:SetText(suppressed .. " error(s) suppressed")
+            self.statusBar:Show()
+            self.scrollList:SetPoint("TOPLEFT", 0, -20)
+        else
+            self.statusBar:Hide()
+            self.scrollList:SetPoint("TOPLEFT", 0, 0)
+        end
+    end
 end
 
 function ErrorsTab:OnNewError(entry)

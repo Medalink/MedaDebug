@@ -458,7 +458,7 @@ end
 
 function DebugFrame:UpdateErrorBadge()
     if self.tabBar and MedaDebug.ErrorHandler then
-        local count = MedaDebug.ErrorHandler:GetErrorCount()
+        local count = MedaDebug.ErrorHandler:GetVisibleErrorCount()
         self.tabBar:SetBadge("errors", count)
     end
 end

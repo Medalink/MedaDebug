@@ -23,6 +23,7 @@ local ERROR_PATTERNS = {
     {type = "INVALID_ARGUMENT", pattern = "bad argument #(%d+)", hint = "Wrong argument type to function (arg #%s)"},
     {type = "SECURE_HOOK", pattern = "Cannot call.-in combat", hint = "Protected function called in combat - queue for after combat"},
     {type = "TAINT", pattern = "Action.*was blocked", hint = "Tainted code execution - check for secure frame modifications"},
+    {type = "LUA_WARNING", pattern = "^LUA_WARNING:", hint = "Client warning (usually Blizzard UI) - typically harmless and safe to suppress"},
 
     -- Secrets-related errors (WoW 12.0.0+)
     -- Hints updated with empirical findings from Midnight 12.0 testing

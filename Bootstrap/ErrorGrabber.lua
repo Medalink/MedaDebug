@@ -40,11 +40,22 @@ local function MedaDebugErrorHandler(errorMessage)
     end
 
     local timestamp = time()
+    local msg = tostring(errorMessage) or "Unknown error"
     local stack = debugstack(3) -- Skip error handler frames
+
+    -- LUA_WARNING messages embed their stack trace in the message body.
+    -- Extract it so the pipeline can parse it like a normal error.
+    local warningText, warningStack = msg:match("^(LUA_WARNING:[^\n]+)\nStack:\n(.*)")
+    if warningText then
+        msg = warningText
+        if warningStack and warningStack ~= "" then
+            stack = warningStack
+        end
+    end
 
     -- Create error entry
     local entry = {
-        message = tostring(errorMessage) or "Unknown error",
+        message = msg,
         stack = stack,
         timestamp = timestamp,
         datetime = date("%Y-%m-%d %H:%M:%S", timestamp),
@@ -152,9 +163,21 @@ local function RegisterWithBugGrabber()
         if not errorObject then return end
 
         local timestamp = time()
+        local bgMsg = errorObject.message or "Unknown error"
+        local bgStack = errorObject.stack or ""
+
+        -- LUA_WARNING messages embed their stack trace in the message body
+        local warnText, warnStack = bgMsg:match("^(LUA_WARNING:[^\n]+)\nStack:\n(.*)")
+        if warnText then
+            bgMsg = warnText
+            if warnStack and warnStack ~= "" then
+                bgStack = warnStack
+            end
+        end
+
         local entry = {
-            message = errorObject.message or "Unknown error",
-            stack = errorObject.stack or "",
+            message = bgMsg,
+            stack = bgStack,
             timestamp = timestamp,
             datetime = date("%Y-%m-%d %H:%M:%S", timestamp),
             processed = false,

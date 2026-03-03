@@ -8,6 +8,7 @@
 
 ## X-Category: Development Tools
 ## X-Website: https://github.com/Medalink/MedaDebug
+## Dependencies: MedaUI
 
 # Bootstrap - MUST load first (zero dependencies)
 Bootstrap\ErrorGrabber.lua

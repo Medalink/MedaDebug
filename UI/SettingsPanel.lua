@@ -126,6 +126,16 @@ function SettingsPanel:Initialize()
     restoreCheckbox.OnValueChanged = function(_, checked)
         MedaDebug.db.options.restoreSessionData = checked
     end
+    yPos = yPos - 24
+
+    -- Mute all sounds
+    local muteSoundsCheckbox = MedaUI:CreateCheckbox(content, "Mute all sounds")
+    muteSoundsCheckbox:SetPoint("TOPLEFT", 12, yPos)
+    muteSoundsCheckbox:SetChecked(MedaDebug.db.options.muteSounds)
+    muteSoundsCheckbox.OnValueChanged = function(_, checked)
+        MedaDebug.db.options.muteSounds = checked
+        MedaUI:SetSoundsEnabled(not checked)
+    end
     yPos = yPos - 16
     
     CreateSeparator()

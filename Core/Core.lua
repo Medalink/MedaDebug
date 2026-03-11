@@ -17,6 +17,7 @@ local DEFAULT_DB = {
         -- General
         devMode = false,
         outputToChat = false,
+        muteSounds = false,
         logMode = "session", -- "session", "persistent", "both"
         maxLogEntries = 5000,
         restoreSessionData = true,
@@ -167,7 +168,12 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         local loadedAddon = ...
         if loadedAddon == addonName then
             InitializeDB()
-            
+
+            local MedaUI = LibStub("MedaUI-1.0")
+            if MedaDebug.db.options.muteSounds then
+                MedaUI:SetSoundsEnabled(false)
+            end
+
             -- Track reload
             MedaDebug.log.session.reloadCount = (MedaDebug.log.session.reloadCount or 0) + 1
             if MedaDebug.log.session.startTime == 0 then

@@ -5,6 +5,7 @@
 
 local addonName, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
+local Pixel = MedaUI.Pixel
 
 local SecretsTab = {}
 MedaDebug.SecretsTab = SecretsTab
@@ -55,16 +56,14 @@ function SecretsTab:Initialize(parent)
     self.contentContainer:SetPoint("TOPLEFT", 0, -28)
     self.contentContainer:SetPoint("BOTTOMRIGHT", 0, 0)
 
-    -- Create scroll frame
-    self.scrollFrame = CreateFrame("ScrollFrame", nil, self.contentContainer, "UIPanelScrollFrameTemplate")
-    self.scrollFrame:SetPoint("TOPLEFT", 0, 0)
-    self.scrollFrame:SetPoint("BOTTOMRIGHT", -20, 0)
+    -- Scroll frame (AF custom scrollbar)
+    self.scrollParent = MedaUI:CreateScrollFrame(self.contentContainer)
+    Pixel.SetPoint(self.scrollParent, "TOPLEFT", 0, 0)
+    Pixel.SetPoint(self.scrollParent, "BOTTOMRIGHT", 0, 0)
+    self.scrollParent:SetScrollStep(30)
 
-    -- Scroll child for content
-    self.scrollChild = CreateFrame("Frame", nil, self.scrollFrame)
-    self.scrollChild:SetWidth(self.contentContainer:GetWidth() - 24)
-    self.scrollChild:SetHeight(1) -- Will be adjusted dynamically
-    self.scrollFrame:SetScrollChild(self.scrollChild)
+    self.scrollChild = self.scrollParent.scrollContent
+    Pixel.SetHeight(self.scrollChild, 1)
 
     -- Build sections
     self:BuildSections()
@@ -129,11 +128,7 @@ function SecretsTab:CreateSection(parent, title, yOffset)
     local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     section:SetPoint("TOPLEFT", 0, yOffset)
     section:SetPoint("RIGHT", -4, 0)
-    section:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
+    section:SetBackdrop(MedaUI:CreateBackdrop(true))
     section:SetBackdropColor(unpack(Theme.backgroundDark))
     section:SetBackdropBorderColor(unpack(Theme.border))
 
@@ -369,9 +364,7 @@ function SecretsTab:DisplaySearchResults(results)
         row:SetPoint("TOPLEFT", 0, yPos)
         row:SetPoint("RIGHT", 0, 0)
         row:SetHeight(rowHeight - 4)
-        row:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-        })
+        row:SetBackdrop(MedaUI:CreateBackdrop(false))
         row:SetBackdropColor(0.15, 0.15, 0.15, 0.5)
 
         -- API name and description

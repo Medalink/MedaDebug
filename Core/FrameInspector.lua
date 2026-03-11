@@ -5,6 +5,7 @@
 ]]
 
 local addonName, MedaDebug = ...
+local MedaUI = LibStub("MedaUI-1.0")
 
 local FrameInspector = {}
 MedaDebug.FrameInspector = FrameInspector
@@ -134,10 +135,8 @@ function FrameInspector:Initialize()
     -- Border
     local border = CreateFrame("Frame", nil, self.highlightFrame, "BackdropTemplate")
     border:SetAllPoints()
-    border:SetBackdrop({
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 2,
-    })
+    border:SetBackdrop(MedaUI:CreateBackdrop(true))
+    border:SetBackdropColor(0, 0, 0, 0)
     border:SetBackdropBorderColor(1, 0.85, 0, 1)
     self.highlightFrame.border = border
 
@@ -178,10 +177,8 @@ function FrameInspector:Initialize()
     -- Help overlay border
     local helpBorder = CreateFrame("Frame", nil, self.helpOverlay, "BackdropTemplate")
     helpBorder:SetAllPoints()
-    helpBorder:SetBackdrop({
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
+    helpBorder:SetBackdrop(MedaUI:CreateBackdrop(true))
+    helpBorder:SetBackdropColor(0, 0, 0, 0)
     helpBorder:SetBackdropBorderColor(1, 0.85, 0, 0.8)
 
     -- Help title
@@ -221,10 +218,8 @@ function FrameInspector:Initialize()
     -- Status border
     local statusBorder = CreateFrame("Frame", nil, self.statusOverlay, "BackdropTemplate")
     statusBorder:SetAllPoints()
-    statusBorder:SetBackdrop({
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
+    statusBorder:SetBackdrop(MedaUI:CreateBackdrop(true))
+    statusBorder:SetBackdropColor(0, 0, 0, 0)
     statusBorder:SetBackdropBorderColor(0.3, 1, 0.3, 1)
     self.statusOverlay.border = statusBorder
 

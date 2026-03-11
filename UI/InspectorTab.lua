@@ -5,6 +5,7 @@
 
 local addonName, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
+local Pixel = MedaUI.Pixel
 
 local InspectorTab = {}
 MedaDebug.InspectorTab = InspectorTab
@@ -558,11 +559,7 @@ function InspectorTab:ShowIgnoredFramesPanel()
         panel:RegisterForDrag("LeftButton")
         panel:SetScript("OnDragStart", panel.StartMoving)
         panel:SetScript("OnDragStop", panel.StopMovingOrSizing)
-        panel:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            edgeSize = 1,
-        })
+        panel:SetBackdrop(MedaUI:CreateBackdrop(true))
         panel:SetBackdropColor(unpack(Theme.background))
         panel:SetBackdropBorderColor(unpack(Theme.border))
         panel:Hide()
@@ -572,7 +569,7 @@ function InspectorTab:ShowIgnoredFramesPanel()
         titleBar:SetPoint("TOPLEFT", 1, -1)
         titleBar:SetPoint("TOPRIGHT", -1, -1)
         titleBar:SetHeight(24)
-        titleBar:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8x8"})
+        titleBar:SetBackdrop(MedaUI:CreateBackdrop(false))
         titleBar:SetBackdropColor(unpack(Theme.backgroundLight))
 
         local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -599,15 +596,14 @@ function InspectorTab:ShowIgnoredFramesPanel()
         hint:SetText("|cffaaaaaa(Press 'I' during inspect mode to ignore hovered frame)|r")
         panel.hint = hint
 
-        -- Scroll frame for list
-        local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-        scrollFrame:SetPoint("TOPLEFT", 8, -50)
-        scrollFrame:SetPoint("BOTTOMRIGHT", -28, 40)
+        -- Scroll frame for list (AF custom scrollbar)
+        local scrollParent = MedaUI:CreateScrollFrame(panel)
+        Pixel.SetPoint(scrollParent, "TOPLEFT", 8, -50)
+        Pixel.SetPoint(scrollParent, "BOTTOMRIGHT", -8, 40)
+        scrollParent:SetScrollStep(30)
 
-        local content = CreateFrame("Frame", nil, scrollFrame)
-        content:SetSize(260, 1)
-        scrollFrame:SetScrollChild(content)
-        panel.content = content
+        panel.content = scrollParent.scrollContent
+        Pixel.SetHeight(panel.content, 1)
 
         -- Clear All button
         local clearAllBtn = MedaUI:CreateButton(panel, "Clear All User", 100, 22)

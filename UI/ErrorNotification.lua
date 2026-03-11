@@ -60,7 +60,7 @@ function ErrorNotification:Initialize()
     frame.badgeBg = frame:CreateTexture(nil, "OVERLAY")
     frame.badgeBg:SetSize(24, 24)
     frame.badgeBg:SetPoint("BOTTOMRIGHT", 4, -4)
-    frame.badgeBg:SetColorTexture(0.8, 0.2, 0.2, 1)
+    frame.badgeBg:SetColorTexture(unpack(Theme.error))
     
     -- Make badge background circular using mask
     local badgeMask = frame:CreateMaskTexture()

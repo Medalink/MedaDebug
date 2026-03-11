@@ -5,6 +5,7 @@
 
 local addonName, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
+local Pixel = MedaUI.Pixel
 
 local SettingsPanel = {}
 MedaDebug.SettingsPanel = SettingsPanel
@@ -44,29 +45,17 @@ function SettingsPanel:Initialize()
     local innerBg = CreateFrame("Frame", nil, panelContent, "BackdropTemplate")
     innerBg:SetPoint("TOPLEFT", 0, 0)
     innerBg:SetPoint("BOTTOMRIGHT", 0, 0)
-    innerBg:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-    })
+    innerBg:SetBackdrop(MedaUI:CreateBackdrop(false))
     innerBg:SetBackdropColor(unpack(Theme.backgroundDark))
     
-    -- Scroll frame for content
-    local scrollFrame = CreateFrame("ScrollFrame", nil, innerBg, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 4, -4)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -24, 4)
+    -- Scroll frame for content (AF custom scrollbar)
+    local scrollParent = MedaUI:CreateScrollFrame(innerBg)
+    Pixel.SetPoint(scrollParent, "TOPLEFT", 4, -4)
+    Pixel.SetPoint(scrollParent, "BOTTOMRIGHT", -4, 4)
+    scrollParent:SetScrollStep(30)
     
-    -- Style the scrollbar
-    local scrollBar = scrollFrame.ScrollBar
-    if scrollBar then
-        scrollBar:ClearAllPoints()
-        scrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", 4, -16)
-        scrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", 4, 16)
-    end
-    
-    -- Scroll child (actual content)
-    local content = CreateFrame("Frame", nil, scrollFrame)
-    content:SetWidth(scrollFrame:GetWidth() - 8)
-    content:SetHeight(600)  -- Will be adjusted
-    scrollFrame:SetScrollChild(content)
+    local content = scrollParent.scrollContent
+    Pixel.SetHeight(content, 600)
     
     local yPos = -8
     
@@ -77,9 +66,7 @@ function SettingsPanel:Initialize()
         headerBg:SetHeight(24)
         headerBg:SetPoint("TOPLEFT", 0, yPos)
         headerBg:SetPoint("TOPRIGHT", 0, yPos)
-        headerBg:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-        })
+        headerBg:SetBackdrop(MedaUI:CreateBackdrop(false))
         headerBg:SetBackdropColor(unpack(Theme.background))
         
         local header = headerBg:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -216,7 +203,7 @@ function SettingsPanel:Initialize()
     local warningLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     warningLabel:SetPoint("TOPLEFT", 12, yPos)
     warningLabel:SetText("These features add overhead. Enable only when needed.")
-    warningLabel:SetTextColor(0.9, 0.6, 0.2)
+    warningLabel:SetTextColor(unpack(Theme.warning))
     yPos = yPos - 20
     
     -- Timer Tracking
@@ -376,7 +363,8 @@ function SettingsPanel:Initialize()
     local dangerLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     dangerLabel:SetPoint("TOPLEFT", 12, yPos)
     dangerLabel:SetText("Reset all settings and clear saved data.")
-    dangerLabel:SetTextColor(0.9, 0.5, 0.5)
+    local er, eg, eb = unpack(Theme.error)
+    dangerLabel:SetTextColor(er * 0.5 + 0.5, eg * 0.5 + 0.5, eb * 0.5 + 0.5)
     yPos = yPos - 24
 
     -- Reset to Defaults button

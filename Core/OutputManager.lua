@@ -34,9 +34,19 @@ end
 --- Handle a new message
 --- @param entry table Message entry {timestamp, datetime, addon, level, message, levelColor, addonColor}
 function OutputManager:HandleMessage(entry)
-    -- Check if this is a duplicate of the last message (same addon, level, and message)
+    -- Check if this is a duplicate of the last message (same addon, level, and message).
+    -- pcall guards against secret/tainted strings that cannot be compared.
     local lastMsg = self.messages[#self.messages]
-    if lastMsg and lastMsg.addon == entry.addon and lastMsg.level == entry.level and lastMsg.message == entry.message then
+    local isDuplicate = false
+    if lastMsg then
+        local ok, result = pcall(function()
+            return lastMsg.addon == entry.addon
+               and lastMsg.level == entry.level
+               and lastMsg.message == entry.message
+        end)
+        isDuplicate = ok and result
+    end
+    if isDuplicate then
         -- Increment count on existing message
         lastMsg.count = (lastMsg.count or 1) + 1
         lastMsg.lastTimestamp = entry.timestamp

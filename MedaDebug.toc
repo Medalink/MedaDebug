@@ -2,13 +2,12 @@
 ## Title: MedaDebug
 ## Notes: Developer toolkit for WoW addon development with AI agent integration
 ## Author: Medalink
-## Version: 1.0.0
+## Version: @project-version@
 ## IconTexture: Interface\AddOns\MedaDebug\Media\debug
 ## SavedVariables: MedaDebugDB, MedaDebugLog, MedaDebugErrors
 
 ## X-Category: Development Tools
 ## X-Website: https://github.com/Medalink/MedaDebug
-## Dependencies: AbstractFramework
 
 # Bootstrap - MUST load first (zero dependencies)
 Bootstrap\ErrorGrabber.lua

@@ -109,9 +109,7 @@ function DebugFrame:Initialize()
     self.mainContent = CreateFrame("Frame", nil, content, "BackdropTemplate")
     self.mainContent:SetPoint("TOPLEFT", 0, 0)
     self.mainContent:SetPoint("BOTTOMRIGHT", 0, 0)
-    self.mainContent:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-    })
+    self.mainContent:SetBackdrop(MedaUI:CreateBackdrop(false))
     self.mainContent:SetBackdropColor(unpack(Theme.backgroundDark))
     
     -- Toolbar area (tabs + filter row)
@@ -119,9 +117,7 @@ function DebugFrame:Initialize()
     self.toolbar:SetHeight(68)
     self.toolbar:SetPoint("TOPLEFT", 0, 0)
     self.toolbar:SetPoint("TOPRIGHT", 0, 0)
-    self.toolbar:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-    })
+    self.toolbar:SetBackdrop(MedaUI:CreateBackdrop(false))
     self.toolbar:SetBackdropColor(unpack(Theme.background))
     
     -- Tab bar (full width on first row)
@@ -185,9 +181,7 @@ function DebugFrame:Initialize()
     self.quickActions:SetHeight(32)
     self.quickActions:SetPoint("BOTTOMLEFT", 0, 0)
     self.quickActions:SetPoint("BOTTOMRIGHT", 0, 0)
-    self.quickActions:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-    })
+    self.quickActions:SetBackdrop(MedaUI:CreateBackdrop(false))
     self.quickActions:SetBackdropColor(unpack(Theme.background))
     
     -- Quick actions top border

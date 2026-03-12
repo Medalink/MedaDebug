@@ -61,6 +61,23 @@ local function SafeToString(value)
     return str
 end
 
+local function IsSecretValue(value)
+    return issecretvalue and issecretvalue(value) or false
+end
+
+local function SafeBooleanCall(object, method)
+    if not object or not method then
+        return nil
+    end
+
+    local ok, value = pcall(method, object)
+    if not ok or IsSecretValue(value) then
+        return nil
+    end
+
+    return value and true or false
+end
+
 -- Default frames to ignore during inspection (full-screen overlays, etc.)
 local DEFAULT_IGNORED_FRAMES = {
     -- Model scenes (full-screen effect overlays)
@@ -462,8 +479,8 @@ function FrameInspector:StartInspectMode()
                     if ok and children and #children > 0 then
                         -- Find first visible child
                         for _, child in ipairs(children) do
-                            local okVis, isVis = pcall(child.IsVisible, child)
-                            if okVis and isVis then
+                            local isVisible = SafeBooleanCall(child, child.IsVisible)
+                            if isVisible then
                                 self.navigatedFrame = child
                                 self:UpdateHighlightForFrame(child)
                                 return
@@ -651,8 +668,8 @@ function FrameInspector:CaptureFrameState(frame)
     local centerX, centerY = frame:GetCenter()
 
     return {
-        shown = frame:IsShown(),
-        visible = frame:IsVisible(),
+        shown = SafeBooleanCall(frame, frame.IsShown),
+        visible = SafeBooleanCall(frame, frame.IsVisible),
         alpha = frame:GetAlpha() or 0,
         width = width,
         height = height,
@@ -718,7 +735,8 @@ function FrameInspector:RefreshLayoutOverlay()
     end
 
     local frame = self.inspectedFrame
-    if not self.layoutOverlayEnabled or not frame or not frame:IsShown() then
+    local isShown = frame and SafeBooleanCall(frame, frame.IsShown)
+    if not self.layoutOverlayEnabled or not frame or not isShown then
         self.layoutOverlay:Hide()
         self:HideUnusedAnchorMarkers(1)
         return
@@ -831,18 +849,10 @@ function FrameInspector:GetFrameUnderCursor()
 
     local frame = EnumerateFrames()
     while frame do
-        local visible = false
-        local ok1, result1 = pcall(frame.IsVisible, frame)
-        if ok1 and result1 and not (issecretvalue and issecretvalue(result1)) then
-            visible = true
-        end
+        local visible = SafeBooleanCall(frame, frame.IsVisible)
 
         if visible then
-            local ok2, result2 = pcall(frame.IsMouseOver, frame)
-            local isOver = false
-            if ok2 and result2 and not (issecretvalue and issecretvalue(result2)) then
-                isOver = true
-            end
+            local isOver = SafeBooleanCall(frame, frame.IsMouseOver)
 
             if isOver then
                 local ok3, name = pcall(frame.GetName, frame)
@@ -1063,8 +1073,8 @@ function FrameInspector:GetFrameInfo(frame)
         points = {},
 
         -- State
-        isShown = frame:IsShown(),
-        isVisible = frame:IsVisible(),
+        isShown = SafeBooleanCall(frame, frame.IsShown),
+        isVisible = SafeBooleanCall(frame, frame.IsVisible),
         alpha = frame:GetAlpha(),
         frameLevel = frame.GetFrameLevel and frame:GetFrameLevel() or "N/A",
         frameStrata = frame.GetFrameStrata and frame:GetFrameStrata() or "N/A",
@@ -1089,7 +1099,7 @@ function FrameInspector:GetFrameInfo(frame)
     -- Helper to safely get values that might be secrets
     local function safeValue(val)
         if val == nil then return nil end
-        if issecretvalue and issecretvalue(val) then
+        if IsSecretValue(val) then
             return "(secret)"
         end
         return val
@@ -1097,7 +1107,7 @@ function FrameInspector:GetFrameInfo(frame)
 
     local function safeNumber(val)
         if val == nil then return 0 end
-        if issecretvalue and issecretvalue(val) then
+        if IsSecretValue(val) then
             return nil  -- Return nil so we know it's secret
         end
         return val

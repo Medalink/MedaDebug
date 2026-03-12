@@ -354,22 +354,6 @@ function SettingsPanel:Initialize()
     yPos = yPos - 16
     
     CreateSeparator()
-    
-    -- =====================
-    -- Quick Actions Section
-    -- =====================
-    CreateSection("Quick Actions")
-    
-    -- Confirm reload
-    local confirmReloadCheckbox = MedaUI:CreateCheckbox(content, "Confirm before /reload")
-    confirmReloadCheckbox:SetPoint("TOPLEFT", 12, yPos)
-    confirmReloadCheckbox:SetChecked(MedaDebug.db.options.confirmReload)
-    confirmReloadCheckbox.OnValueChanged = function(_, checked)
-        MedaDebug.db.options.confirmReload = checked
-    end
-    yPos = yPos - 16
-
-    CreateSeparator()
 
     -- =====================
     -- Danger Zone Section

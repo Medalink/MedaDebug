@@ -197,24 +197,7 @@ function DebugFrame:Initialize()
     local reloadBtn = MedaUI:CreateButton(self.quickActions, "/reload", 60, 26)
     reloadBtn:SetPoint("LEFT", 8, 0)
     reloadBtn:SetScript("OnClick", function()
-        if not (MedaDebug.db and MedaDebug.db.options.confirmReload) then
-            ReloadUI()
-            return
-        end
-
-        StaticPopupDialogs["MEDADEBUG_CONFIRM_RELOAD"] = {
-            text = "Reload the UI now?",
-            button1 = "Reload",
-            button2 = "Cancel",
-            OnAccept = function()
-                ReloadUI()
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3,
-        }
-        StaticPopup_Show("MEDADEBUG_CONFIRM_RELOAD")
+        ReloadUI()
     end)
 
     local gcBtn = MedaUI:CreateButton(self.quickActions, "GC", 40, 26)

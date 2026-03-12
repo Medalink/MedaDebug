@@ -58,7 +58,6 @@ local DEFAULT_DB = {
         inspectorRefreshInterval = 0.5,
         
         -- Quick Actions
-        confirmReload = true,
         customActions = {},
         
         -- System Monitor

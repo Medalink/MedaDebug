@@ -115,11 +115,10 @@ function SecretsTab:BuildSections()
     -- AddOn Restrictions Section
     self.restrictionsSection = self:CreateSection(self.scrollChild, "AddOn Restrictions (C_RestrictedActions)", yOffset)
     self.restrictionsContent = self.restrictionsSection.content
-    yOffset = yOffset - self.restrictionsSection.height - 8
     self:BuildRestrictionsContent()
 
-    -- Update scroll child height
-    self.scrollChild:SetHeight(math.abs(yOffset) + 50)
+    -- Reflow sections after their real heights are known.
+    self:RecalculateScrollHeight()
 end
 
 function SecretsTab:CreateSection(parent, title, yOffset)
@@ -301,6 +300,9 @@ function SecretsTab:DoSearch()
     if not query or query == "" then
         self.searchPlaceholder:Show()
         self:ClearSearchResults()
+        self.searchResultsSection:SetHeight(80)
+        self.searchResultsSection.height = 80
+        self:RecalculateScrollHeight()
         return
     end
 
@@ -333,6 +335,8 @@ function SecretsTab:DisplaySearchResults(results)
         self.searchPlaceholder:SetText("No results found for query")
         self.searchPlaceholder:Show()
         self.searchResultsSection:SetHeight(80)
+        self.searchResultsSection.height = 80
+        self:RecalculateScrollHeight()
         return
     end
 
@@ -577,6 +581,9 @@ function SecretsTab:Clear()
     end
     self.searchPlaceholder:SetText("Enter a search term above (e.g., mana, health, aura)")
     self.searchPlaceholder:Show()
+    self.searchResultsSection:SetHeight(80)
+    self.searchResultsSection.height = 80
+    self:RecalculateScrollHeight()
 end
 
 function SecretsTab:OnFilterChanged(filter)

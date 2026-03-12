@@ -3,7 +3,7 @@
     System info, memory, and SV diff display
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
 
 local SystemTab = {}
@@ -125,12 +125,16 @@ function SystemTab:Initialize(parent)
     -- Connect to system monitor
     if MedaDebug.SystemMonitor then
         MedaDebug.SystemMonitor.onStatsUpdated = function(stats)
-            self:UpdateStats(stats)
+            if self.frame and self.frame:IsShown() then
+                self:UpdateStats(stats)
+            end
         end
     end
     
     -- Initial update
-    self:RefreshAll()
+    if MedaDebug.SystemMonitor and MedaDebug.SystemMonitor:IsEnabled() then
+        self:RefreshAll()
+    end
 end
 
 function SystemTab:CreateStatLabel(parent, label, x, y)
@@ -151,8 +155,6 @@ end
 
 function SystemTab:UpdateStats(stats)
     if not stats then return end
-    
-    local Theme = MedaUI:GetTheme()
     
     -- FPS (using MedaUI status color utility)
     local fps = stats.fps or 0
@@ -231,11 +233,11 @@ function SystemTab:RefreshDiff()
 end
 
 function SystemTab:RefreshAll()
-    if MedaDebug.SystemMonitor then
+    if MedaDebug.SystemMonitor and MedaDebug.SystemMonitor:IsEnabled() then
         MedaDebug.SystemMonitor:Update()
         self:UpdateStats(MedaDebug.SystemMonitor:GetStats())
+        self:RefreshMemory()
     end
-    self:RefreshMemory()
     self:RefreshDiff()
 end
 

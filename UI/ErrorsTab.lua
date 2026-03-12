@@ -3,7 +3,7 @@
     Displays errors with smart formatting and hints
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
 
 local ErrorsTab = {}
@@ -12,6 +12,24 @@ MedaDebug.ErrorsTab = ErrorsTab
 ErrorsTab.frame = nil
 ErrorsTab.scrollList = nil
 ErrorsTab.selectedError = nil
+ErrorsTab.currentFilter = "all"
+ErrorsTab.searchText = ""
+ErrorsTab.viewData = nil
+
+local function SafeContains(text, search)
+    if type(text) ~= "string" or search == "" then
+        return false
+    end
+
+    local ok, lowerText = pcall(function()
+        return text:lower()
+    end)
+    if not ok then
+        return false
+    end
+
+    return lowerText:find(search, 1, true) ~= nil
+end
 
 function ErrorsTab:Initialize(parent)
     self.frame = parent
@@ -40,6 +58,31 @@ function ErrorsTab:Initialize(parent)
     
     -- Initial data load
     self:RefreshData()
+end
+
+function ErrorsTab:HasActiveSearch()
+    return self.searchText and self.searchText ~= ""
+end
+
+function ErrorsTab:MatchesFilters(entry)
+    local summary = entry.summary or {}
+    local sourceAddon = summary.sourceAddon or "Unknown"
+
+    if self.currentFilter ~= "all" and sourceAddon ~= self.currentFilter then
+        return false
+    end
+
+    if self:HasActiveSearch() then
+        local search = self.searchText:lower()
+        if not SafeContains(summary.shortMessage, search) and
+           not SafeContains(summary.hint, search) and
+           not SafeContains(sourceAddon, search) and
+           not SafeContains(entry.raw and entry.raw.message, search) then
+            return false
+        end
+    end
+
+    return true
 end
 
 function ErrorsTab:RenderRow(row, data, index)
@@ -187,6 +230,8 @@ function ErrorsTab:RenderRow(row, data, index)
     -- Selection highlight
     if self.selectedError == data.id then
         row:SetBackdropColor(0.3, 0.3, 0.5, 0.5)
+    else
+        row:SetBackdropColor(0, 0, 0, 0)
     end
 end
 
@@ -194,7 +239,16 @@ function ErrorsTab:RefreshData()
     if not self.scrollList or not MedaDebug.ErrorHandler then return end
     
     local errors = MedaDebug.ErrorHandler:GetErrors()
-    self.scrollList:SetData(errors)
+    local filtered = {}
+
+    for _, err in ipairs(errors) do
+        if self:MatchesFilters(err) then
+            filtered[#filtered + 1] = err
+        end
+    end
+
+    self.viewData = filtered
+    self.scrollList:SetData(self.viewData)
     self.scrollList:Refresh()
     
     -- Update suppressed count status bar
@@ -212,11 +266,26 @@ function ErrorsTab:RefreshData()
 end
 
 function ErrorsTab:OnNewError(entry)
-    self:RefreshData()
-    
-    -- Auto-scroll to new error
-    if MedaDebug.db and MedaDebug.db.options.autoScroll then
-        self.scrollList:ScrollToBottom()
+    if not self.scrollList then
+        return
+    end
+
+    if self:HasActiveSearch() or not self:MatchesFilters(entry) or not self.viewData then
+        self:RefreshData()
+    else
+        self.scrollList:AddItem(entry, MedaDebug.db and MedaDebug.db.options.autoScroll)
+    end
+end
+
+function ErrorsTab:OnErrorUpdated(entry)
+    if not self.scrollList then
+        return
+    end
+
+    if self:MatchesFilters(entry) then
+        self.scrollList:Refresh()
+    else
+        self:RefreshData()
     end
 end
 
@@ -253,11 +322,11 @@ function ErrorsTab:OnShow()
 end
 
 function ErrorsTab:OnFilterChanged(filter)
-    -- Errors don't filter by addon currently
+    self.currentFilter = filter
     self:RefreshData()
 end
 
 function ErrorsTab:OnSearch(text)
-    -- TODO: Filter errors by search text
+    self.searchText = text or ""
     self:RefreshData()
 end

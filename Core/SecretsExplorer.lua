@@ -3,7 +3,7 @@
     Analyze WoW 12.0.0+ secret values and widget restrictions
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 
 local SecretsExplorer = {}
 MedaDebug.SecretsExplorer = SecretsExplorer
@@ -439,7 +439,7 @@ function SecretsExplorer:GetValueSecretInfo(value)
 
         local tostrOk = pcall(function()
             local s = tostring(value)
-            if s == "___PROBE___" then end
+            return s == "___PROBE___"
         end)
         tb.tostring = tostrOk and "clean" or "tainted"
 
@@ -669,7 +669,7 @@ function SecretsExplorer:SafeValueStr(value)
 
     -- Verify the result string is clean by forcing a comparison
     local cleanOk = pcall(function()
-        if str == "___TAINT_PROBE___" then end
+        return str == "___TAINT_PROBE___"
     end)
     if not cleanOk then
         return "???(tainted " .. valType .. ")"
@@ -751,7 +751,7 @@ function SecretsExplorer:TestAPICall(apiName, args)
 
         local tostrOk = pcall(function()
             local s = tostring(ret1)
-            if s == "___PROBE___" then end
+            return s == "___PROBE___"
         end)
         behavior.tostring = tostrOk and "clean" or "tainted"
 

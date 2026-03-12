@@ -123,33 +123,29 @@ local DEFAULT_LOG = {
 
 -- Initialize database
 local function InitializeDB()
+    local function MergeDefaults(target, defaults)
+        for key, value in pairs(defaults) do
+            if target[key] == nil then
+                target[key] = type(value) == "table" and CopyTable(value) or value
+            elseif type(value) == "table" and type(target[key]) == "table" then
+                MergeDefaults(target[key], value)
+            end
+        end
+    end
+
     -- Main settings DB
     if not MedaDebugDB then
         MedaDebugDB = CopyTable(DEFAULT_DB)
     else
-        -- Migrate: add missing keys from defaults
-        for key, value in pairs(DEFAULT_DB) do
-            if MedaDebugDB[key] == nil then
-                MedaDebugDB[key] = CopyTable(value)
-            elseif type(value) == "table" and type(MedaDebugDB[key]) == "table" then
-                for subKey, subValue in pairs(value) do
-                    if MedaDebugDB[key][subKey] == nil then
-                        MedaDebugDB[key][subKey] = type(subValue) == "table" and CopyTable(subValue) or subValue
-                    end
-                end
-            end
-        end
+        -- Migrate: recursively add missing keys from defaults
+        MergeDefaults(MedaDebugDB, DEFAULT_DB)
     end
     
     -- Log DB
     if not MedaDebugLog then
         MedaDebugLog = CopyTable(DEFAULT_LOG)
     else
-        for key, value in pairs(DEFAULT_LOG) do
-            if MedaDebugLog[key] == nil then
-                MedaDebugLog[key] = CopyTable(value)
-            end
-        end
+        MergeDefaults(MedaDebugLog, DEFAULT_LOG)
     end
     
     MedaDebug.db = MedaDebugDB
@@ -160,7 +156,6 @@ end
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("PLAYER_LOGOUT")
 
 eventFrame:SetScript("OnEvent", function(self, event, ...)
@@ -201,6 +196,12 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         end
         if MedaDebug.FrameInspector and MedaDebug.FrameInspector.Initialize then
             MedaDebug.FrameInspector:Initialize()
+        end
+        if MedaDebug.VariableWatch and MedaDebug.VariableWatch.Initialize then
+            MedaDebug.VariableWatch:Initialize()
+        end
+        if MedaDebug.SVDiff and MedaDebug.SVDiff.Initialize then
+            MedaDebug.SVDiff:Initialize()
         end
         if MedaDebug.SecretsExplorer and MedaDebug.SecretsExplorer.Initialize then
             MedaDebug.SecretsExplorer:Initialize()
@@ -310,9 +311,6 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 end
             end
         end)
-        
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        -- Additional initialization if needed
         
     elseif event == "PLAYER_LOGOUT" then
         -- Save frame state before logout/reload
@@ -617,7 +615,9 @@ function MedaDebug:TameBlizzardErrors()
             StaticPopupDialogs[key] = {
                 button1 = "",
                 button2 = "",
-                OnShow = function(self) self:Hide() end,
+                OnShow = function(popup)
+                    popup:Hide()
+                end,
             }
             pcall(StaticPopup_Hide, key)
         end
@@ -644,11 +644,11 @@ function MedaDebug:TameBlizzardErrors()
         end
     end)
 
-    notice:SetScript("OnEnter", function(self)
-        self.text:SetTextColor(1, 0.8, 0.5)
+    notice:SetScript("OnEnter", function(noticeFrame)
+        noticeFrame.text:SetTextColor(1, 0.8, 0.5)
     end)
-    notice:SetScript("OnLeave", function(self)
-        self.text:SetTextColor(0.7, 0.7, 0.7)
+    notice:SetScript("OnLeave", function(noticeFrame)
+        noticeFrame.text:SetTextColor(0.7, 0.7, 0.7)
     end)
 
     self.errorBar = notice

@@ -3,7 +3,7 @@
     Floating icon that appears when errors occur
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
 
 local ErrorNotification = {}
@@ -12,6 +12,17 @@ MedaDebug.ErrorNotification = ErrorNotification
 ErrorNotification.frame = nil
 ErrorNotification.errorCount = 0
 local DEFAULT_ERROR_ICON_TEXTURE = "Interface\\AddOns\\MedaDebug\\Media\\debug@2x"
+
+local function CreateFadeAnimation(frame, fromAlpha, toAlpha, duration, smoothing, onFinished)
+    local animationGroup = frame:CreateAnimationGroup()
+    local alpha = animationGroup:CreateAnimation("Alpha")
+    alpha:SetFromAlpha(fromAlpha)
+    alpha:SetToAlpha(toAlpha)
+    alpha:SetDuration(duration)
+    alpha:SetSmoothing(smoothing)
+    animationGroup:SetScript("OnFinished", onFinished)
+    return animationGroup
+end
 
 function ErrorNotification:GetIconTexture()
     -- Error notification always uses the high-quality 2x icon asset.
@@ -39,13 +50,13 @@ function ErrorNotification:Initialize()
     -- Make draggable
     frame:SetMovable(true)
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function(self)
-        self:StartMoving()
+    frame:SetScript("OnDragStart", function(button)
+        button:StartMoving()
     end)
-    frame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
+    frame:SetScript("OnDragStop", function(button)
+        button:StopMovingOrSizing()
         -- Save position
-        local point, _, _, x, y = self:GetPoint()
+        local point, _, _, x, y = button:GetPoint()
         db.errorNotificationPosition.point = point
         db.errorNotificationPosition.x = x
         db.errorNotificationPosition.y = y
@@ -76,7 +87,7 @@ function ErrorNotification:Initialize()
     frame.badge:SetText("0")
     
     -- Click handlers
-    frame:SetScript("OnClick", function(self, button)
+    frame:SetScript("OnClick", function(buttonFrame, button)
         if button == "LeftButton" then
             -- Show debug window and switch to errors tab
             if MedaDebug.DebugFrame then
@@ -92,8 +103,8 @@ function ErrorNotification:Initialize()
     end)
     
     -- Tooltip
-    frame:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    frame:SetScript("OnEnter", function(button)
+        GameTooltip:SetOwner(button, "ANCHOR_LEFT")
         GameTooltip:AddLine("MedaDebug Errors", 1, 0.8, 0)
         GameTooltip:AddLine(" ")
         local count = ErrorNotification.errorCount
@@ -109,7 +120,7 @@ function ErrorNotification:Initialize()
         GameTooltip:Show()
     end)
     
-    frame:SetScript("OnLeave", function(self)
+    frame:SetScript("OnLeave", function(button)
         GameTooltip:Hide()
     end)
     
@@ -117,10 +128,18 @@ function ErrorNotification:Initialize()
     
     -- Apply initial settings
     self:ApplySettings()
+
+    self.fadeIn = CreateFadeAnimation(frame, 0, settings.opacity, 0.3, "OUT", function()
+        self.frame:SetAlpha(MedaDebug.db.options.errorNotification.opacity)
+    end)
+    self.fadeOut = CreateFadeAnimation(frame, settings.opacity, 0, 0.2, "IN", function()
+        self.frame:Hide()
+        self.frame:SetAlpha(MedaDebug.db.options.errorNotification.opacity)
+    end)
     
     -- Check if we should show (in case errors happened before initialization)
     if MedaDebug.ErrorHandler then
-        local count = MedaDebug.ErrorHandler:GetErrorCount()
+        local count = MedaDebug.ErrorHandler:GetVisibleErrorCount()
         if count > 0 then
             self:UpdateCount(count)
         end
@@ -134,37 +153,31 @@ function ErrorNotification:Show()
     -- Fade in
     self.frame:SetAlpha(0)
     self.frame:Show()
-    
-    local targetAlpha = MedaDebug.db.options.errorNotification.opacity
-    local fadeIn = self.frame:CreateAnimationGroup()
-    local alpha = fadeIn:CreateAnimation("Alpha")
-    alpha:SetFromAlpha(0)
-    alpha:SetToAlpha(targetAlpha)
-    alpha:SetDuration(0.3)
-    alpha:SetSmoothing("OUT")
-    fadeIn:SetScript("OnFinished", function()
-        self.frame:SetAlpha(targetAlpha)
-    end)
-    fadeIn:Play()
+
+    if self.fadeOut and self.fadeOut:IsPlaying() then
+        self.fadeOut:Stop()
+    end
+    if self.fadeIn then
+        self.fadeIn:Stop()
+        local alpha = self.fadeIn:GetAnimations()
+        alpha:SetToAlpha(MedaDebug.db.options.errorNotification.opacity)
+        self.fadeIn:Play()
+    end
 end
 
 function ErrorNotification:Hide()
     if not self.frame then return end
     if not self.frame:IsShown() then return end
-    
-    -- Fade out
-    local currentAlpha = self.frame:GetAlpha()
-    local fadeOut = self.frame:CreateAnimationGroup()
-    local alpha = fadeOut:CreateAnimation("Alpha")
-    alpha:SetFromAlpha(currentAlpha)
-    alpha:SetToAlpha(0)
-    alpha:SetDuration(0.2)
-    alpha:SetSmoothing("IN")
-    fadeOut:SetScript("OnFinished", function()
-        self.frame:Hide()
-        self.frame:SetAlpha(MedaDebug.db.options.errorNotification.opacity)
-    end)
-    fadeOut:Play()
+
+    if self.fadeIn and self.fadeIn:IsPlaying() then
+        self.fadeIn:Stop()
+    end
+    if self.fadeOut then
+        self.fadeOut:Stop()
+        local alpha = self.fadeOut:GetAnimations()
+        alpha:SetFromAlpha(self.frame:GetAlpha())
+        self.fadeOut:Play()
+    end
 end
 
 function ErrorNotification:UpdateCount(count)
@@ -223,6 +236,15 @@ function ErrorNotification:ApplySettings()
     
     -- Apply opacity
     self.frame:SetAlpha(settings.opacity)
+
+    if self.fadeIn then
+        local fadeInAlpha = self.fadeIn:GetAnimations()
+        fadeInAlpha:SetToAlpha(settings.opacity)
+    end
+    if self.fadeOut then
+        local fadeOutAlpha = self.fadeOut:GetAnimations()
+        fadeOutAlpha:SetFromAlpha(settings.opacity)
+    end
     
     -- Show/hide based on enabled state and error count
     if settings.enabled and self.errorCount > 0 then

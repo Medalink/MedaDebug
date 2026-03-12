@@ -3,7 +3,7 @@
     Interface for external addons to send debug messages
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 
 local API = {}
 MedaDebug.API = API
@@ -161,7 +161,12 @@ end
 
 --- Quick log (auto-detects calling addon)
 --- @param message string The message to log
-function MedaDebug:Log(message)
+--- @overload fun(self: table, addonName: string, message: string, level: string|nil): table
+function MedaDebug:Log(message, maybeMessage, maybeLevel)
+    if maybeMessage ~= nil then
+        return API:Output(message, maybeMessage, maybeLevel or "INFO")
+    end
+
     -- Try to detect calling addon from stack
     local stack = debugstack(2, 1, 0)
     local addon = stack:match("AddOns/([^/]+)/") or "Unknown"

@@ -80,11 +80,15 @@ function TimersTab:Initialize(parent)
     -- Connect to timer tracker
     if MedaDebug.TimerTracker then
         MedaDebug.TimerTracker.onTimerAdded = function()
-            self:RefreshData()
-            self:RefreshFilterDropdown()
+            if self.frame and self.frame:IsShown() then
+                self:RefreshData()
+                self:RefreshFilterDropdown()
+            end
         end
         MedaDebug.TimerTracker.onTimerRemoved = function()
-            self:RefreshData()
+            if self.frame and self.frame:IsShown() then
+                self:RefreshData()
+            end
         end
     end
     

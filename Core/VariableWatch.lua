@@ -3,7 +3,7 @@
     Monitor variables and tables in real-time
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 
 local VariableWatch = {}
 MedaDebug.VariableWatch = VariableWatch
@@ -138,7 +138,7 @@ function VariableWatch:UpdateAll()
     
     for path, watch in pairs(self.watches) do
         local newValue, exists = self:ResolvePath(path)
-        local changed = false
+        local changed
         
         -- Check if value changed
         if exists ~= watch.exists then

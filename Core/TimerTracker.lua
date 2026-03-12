@@ -3,7 +3,7 @@
     Track active C_Timer timers and scheduled callbacks
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 
 local TimerTracker = {}
 MedaDebug.TimerTracker = TimerTracker
@@ -23,6 +23,16 @@ TimerTracker.onTimerRemoved = nil
 local originalAfter
 local originalNewTimer
 local originalNewTicker
+
+local function RunInternalAfter(seconds, callback)
+    local afterFunc = originalAfter or (C_Timer and C_Timer.After)
+    if afterFunc then
+        return afterFunc(seconds, callback)
+    end
+
+    callback()
+    return nil
+end
 
 function TimerTracker:Initialize()
     if self.isEnabled then return end
@@ -75,11 +85,13 @@ function TimerTracker:HookTimerFunctions()
         originalAfter = C_Timer.After
         C_Timer.After = function(seconds, callback)
             if tracker.isEnabled then
-                local timer = originalAfter(seconds, function()
-                    tracker:OnTimerFired(callback, "after")
+                local timerId = tracker.timerCount + 1
+                local wrappedCallback = function()
+                    tracker:OnTimerFired(timerId, "after")
                     callback()
-                end)
-                tracker:RegisterTimer("after", seconds, callback, nil, timer)
+                end
+                local timer = originalAfter(seconds, wrappedCallback)
+                tracker:RegisterTimer(timerId, "after", seconds, callback, nil, timer, wrappedCallback)
                 return timer
             else
                 return originalAfter(seconds, callback)
@@ -92,11 +104,13 @@ function TimerTracker:HookTimerFunctions()
         originalNewTimer = C_Timer.NewTimer
         C_Timer.NewTimer = function(seconds, callback)
             if tracker.isEnabled then
-                local timer = originalNewTimer(seconds, function()
-                    tracker:OnTimerFired(callback, "timer")
+                local timerId = tracker.timerCount + 1
+                local wrappedCallback = function()
+                    tracker:OnTimerFired(timerId, "timer")
                     callback()
-                end)
-                tracker:RegisterTimer("timer", seconds, callback, nil, timer)
+                end
+                local timer = originalNewTimer(seconds, wrappedCallback)
+                tracker:RegisterTimer(timerId, "timer", seconds, callback, nil, timer, wrappedCallback)
                 return timer
             else
                 return originalNewTimer(seconds, callback)
@@ -109,14 +123,15 @@ function TimerTracker:HookTimerFunctions()
         originalNewTicker = C_Timer.NewTicker
         C_Timer.NewTicker = function(seconds, callback, iterations)
             if tracker.isEnabled then
+                local timerId = tracker.timerCount + 1
                 local tickCount = 0
                 local wrappedCallback = function()
                     tickCount = tickCount + 1
-                    tracker:OnTickerTick(callback, tickCount, iterations)
+                    tracker:OnTickerTick(timerId, tickCount, iterations)
                     callback()
                 end
                 local timer = originalNewTicker(seconds, wrappedCallback, iterations)
-                tracker:RegisterTimer("ticker", seconds, callback, iterations, timer, wrappedCallback)
+                tracker:RegisterTimer(timerId, "ticker", seconds, callback, iterations, timer, wrappedCallback)
                 return timer
             else
                 return originalNewTicker(seconds, callback, iterations)
@@ -135,14 +150,14 @@ local function DetectSource()
 end
 
 --- Register a new timer
-function TimerTracker:RegisterTimer(timerType, duration, callback, iterations, timerObj, wrappedCallback)
-    self.timerCount = self.timerCount + 1
-    
+function TimerTracker:RegisterTimer(timerId, timerType, duration, callback, iterations, timerObj, wrappedCallback)
+    self.timerCount = math.max(self.timerCount, timerId)
+
     local sourceAddon, sourceLine = DetectSource()
     local now = GetTime()
     
     local entry = {
-        id = self.timerCount,
+        id = timerId,
         type = timerType,
         duration = duration,
         callback = callback,
@@ -159,7 +174,7 @@ function TimerTracker:RegisterTimer(timerType, duration, callback, iterations, t
         isHighFrequency = duration < 0.1,
     }
     
-    self.timers[self.timerCount] = entry
+    self.timers[timerId] = entry
     
     -- Notify UI
     if self.onTimerAdded then
@@ -170,51 +185,50 @@ function TimerTracker:RegisterTimer(timerType, duration, callback, iterations, t
 end
 
 --- Handle timer fired
-function TimerTracker:OnTimerFired(callback, timerType)
-    for id, timer in pairs(self.timers) do
-        if timer.callback == callback and timer.type == timerType and timer.status == "active" then
-            timer.status = "fired"
-            timer.firedAt = GetTime()
-            
-            if self.onTimerRemoved then
-                self.onTimerRemoved(timer)
-            end
-            
-            -- Remove after a delay (for UI display)
-            C_Timer.After(2, function()
-                self.timers[id] = nil
-            end)
-            break
-        end
+function TimerTracker:OnTimerFired(timerId, timerType)
+    local timer = self.timers[timerId]
+    if not timer or timer.type ~= timerType or timer.status ~= "active" then
+        return
     end
+
+    timer.status = "fired"
+    timer.firedAt = GetTime()
+
+    if self.onTimerRemoved then
+        self.onTimerRemoved(timer)
+    end
+
+    -- Remove after a delay for UI display using the original, untracked timer API.
+    RunInternalAfter(2, function()
+        self.timers[timerId] = nil
+    end)
 end
 
 --- Handle ticker tick
-function TimerTracker:OnTickerTick(callback, tickCount, maxIterations)
-    for id, timer in pairs(self.timers) do
-        if timer.callback == callback and timer.type == "ticker" then
-            timer.currentIteration = tickCount
-            timer.nextFireAt = GetTime() + timer.duration
-            
-            if maxIterations then
-                timer.iterationsRemaining = maxIterations - tickCount
-                if timer.iterationsRemaining <= 0 then
-                    timer.status = "completed"
-                    if self.onTimerRemoved then
-                        self.onTimerRemoved(timer)
-                    end
-                    -- Remove after delay
-                    C_Timer.After(2, function()
-                        self.timers[id] = nil
-                    end)
-                end
+function TimerTracker:OnTickerTick(timerId, tickCount, maxIterations)
+    local timer = self.timers[timerId]
+    if not timer or timer.type ~= "ticker" then
+        return
+    end
+
+    timer.currentIteration = tickCount
+    timer.nextFireAt = GetTime() + timer.duration
+    
+    if maxIterations then
+        timer.iterationsRemaining = maxIterations - tickCount
+        if timer.iterationsRemaining <= 0 then
+            timer.status = "completed"
+            if self.onTimerRemoved then
+                self.onTimerRemoved(timer)
             end
-            
-            if self.onTimerUpdated then
-                self.onTimerUpdated(timer)
-            end
-            break
+            RunInternalAfter(2, function()
+                self.timers[timerId] = nil
+            end)
         end
+    end
+
+    if self.onTimerUpdated then
+        self.onTimerUpdated(timer)
     end
 end
 
@@ -223,10 +237,11 @@ function TimerTracker:StartUpdates()
     -- Use OnUpdate for smooth countdown display
     if not self.updateFrame then
         self.updateFrame = CreateFrame("Frame")
-        self.updateFrame:SetScript("OnUpdate", function(_, elapsed)
-            self:UpdateCountdowns()
-        end)
     end
+
+    self.updateFrame:SetScript("OnUpdate", function(_, elapsed)
+        self:UpdateCountdowns()
+    end)
 end
 
 --- Update timer countdowns
@@ -330,6 +345,10 @@ function TimerTracker:CancelTimer(timerId)
         if self.onTimerRemoved then
             self.onTimerRemoved(timer)
         end
+
+        RunInternalAfter(2, function()
+            self.timers[timerId] = nil
+        end)
         
         return true
     end

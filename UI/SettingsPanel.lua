@@ -276,6 +276,9 @@ function SettingsPanel:Initialize()
     maxMsgsSlider:SetValue(MedaDebug.db.options.maxMessages)
     maxMsgsSlider.OnValueChanged = function(_, value)
         MedaDebug.db.options.maxMessages = value
+        if MedaDebug.OutputManager then
+            MedaDebug.OutputManager:SetMaxMessages(value)
+        end
     end
     yPos = yPos - 32
     
@@ -311,6 +314,9 @@ function SettingsPanel:Initialize()
     throttleSlider:SetValue(MedaDebug.db.options.eventThrottle)
     throttleSlider.OnValueChanged = function(_, value)
         MedaDebug.db.options.eventThrottle = value
+        if MedaDebug.EventMonitor then
+            MedaDebug.EventMonitor:SetThrottleThreshold(value)
+        end
     end
     yPos = yPos - 16
     

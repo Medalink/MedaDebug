@@ -154,6 +154,8 @@ function ErrorHandler:RestoreSavedError(savedError)
     if not savedError.error then return end
     
     local err = savedError.error
+    local rawStack = err.rawStack or ""
+    local stackFrames = ParseStack(rawStack)
     
     -- Reconstruct the processed error format
     local entry = {
@@ -169,10 +171,10 @@ function ErrorHandler:RestoreSavedError(savedError)
             callingFunction = "?",
             callChain = err.callChain or {},
         },
-        stackFrames = {},
+        stackFrames = stackFrames,
         raw = {
             message = err.rawMessage or "",
-            stack = err.rawStack or "",
+            stack = rawStack,
             timestamp = savedError.timestamp or time(),
             datetime = savedError.datetime or date("%H:%M:%S"),
         },
@@ -184,9 +186,23 @@ function ErrorHandler:RestoreSavedError(savedError)
         id = #self.errors + 1,
         restored = true, -- Mark as restored
     }
-    
-    -- Add to errors list (don't group restored errors)
+
+    entry.signature = CreateSignature(entry)
+    entry.suppressed = self:IsErrorSuppressed(entry)
+
+    local existing = self.errorGroups[entry.signature]
+    if existing then
+        existing.occurrences.count = existing.occurrences.count + 1
+        existing.occurrences.lastSeen = math.max(existing.occurrences.lastSeen or 0, entry.raw.timestamp or 0)
+        existing.occurrences.firstSeen = math.min(existing.occurrences.firstSeen or entry.raw.timestamp or 0, entry.raw.timestamp or 0)
+        existing.restored = existing.restored and entry.restored
+        existing.suppressed = self:IsErrorSuppressed(existing)
+        return existing
+    end
+
     self.errors[#self.errors + 1] = entry
+    self.errorGroups[entry.signature] = entry
+    return entry
 end
 
 --- Process a raw error into structured format

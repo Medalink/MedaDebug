@@ -3,7 +3,7 @@
     Main tabbed debug window
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
 
 local DebugFrame = {}
@@ -15,6 +15,7 @@ DebugFrame.tabBar = nil
 DebugFrame.tabContents = {}
 DebugFrame.activeTab = "messages"
 DebugFrame.currentFilter = "all"
+DebugFrame.knownMessageAddons = {}
 
 -- Tab definitions
 local TABS = {
@@ -73,31 +74,31 @@ function DebugFrame:Initialize()
     end
 
     -- Add settings button to title bar (white gear icon)
-    local settingsBtn = CreateFrame("Button", nil, self.frame.titleBar, "BackdropTemplate")
-    settingsBtn:SetSize(20, 20)
-    settingsBtn:SetPoint("RIGHT", self.frame.closeButton, "LEFT", -2, 0)
-    settingsBtn:SetBackdrop(MedaUI:CreateBackdrop(false))
-    settingsBtn:SetBackdropColor(0, 0, 0, 0)
+    local titleSettingsBtn = CreateFrame("Button", nil, self.frame.titleBar, "BackdropTemplate")
+    titleSettingsBtn:SetSize(20, 20)
+    titleSettingsBtn:SetPoint("RIGHT", self.frame.closeButton, "LEFT", -2, 0)
+    titleSettingsBtn:SetBackdrop(MedaUI:CreateBackdrop(false))
+    titleSettingsBtn:SetBackdropColor(0, 0, 0, 0)
 
-    settingsBtn.icon = settingsBtn:CreateTexture(nil, "OVERLAY")
-    settingsBtn.icon:SetSize(16, 16)
-    settingsBtn.icon:SetPoint("CENTER")
-    settingsBtn.icon:SetTexture("Interface\\Buttons\\UI-OptionsButton")
-    settingsBtn.icon:SetVertexColor(1, 1, 1)  -- White
+    titleSettingsBtn.icon = titleSettingsBtn:CreateTexture(nil, "OVERLAY")
+    titleSettingsBtn.icon:SetSize(16, 16)
+    titleSettingsBtn.icon:SetPoint("CENTER")
+    titleSettingsBtn.icon:SetTexture("Interface\\Buttons\\UI-OptionsButton")
+    titleSettingsBtn.icon:SetVertexColor(1, 1, 1)  -- White
 
-    settingsBtn:SetScript("OnEnter", function(self)
-        self:SetBackdropColor(unpack(Theme.buttonHover))
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    titleSettingsBtn:SetScript("OnEnter", function(button)
+        button:SetBackdropColor(unpack(Theme.buttonHover))
+        GameTooltip:SetOwner(button, "ANCHOR_TOP")
         GameTooltip:SetText("Settings")
         GameTooltip:Show()
     end)
 
-    settingsBtn:SetScript("OnLeave", function(self)
-        self:SetBackdropColor(0, 0, 0, 0)
+    titleSettingsBtn:SetScript("OnLeave", function(button)
+        button:SetBackdropColor(0, 0, 0, 0)
         GameTooltip:Hide()
     end)
 
-    settingsBtn:SetScript("OnClick", function()
+    titleSettingsBtn:SetScript("OnClick", function()
         if MedaDebug.SettingsPanel then
             MedaDebug.SettingsPanel:Toggle()
         end
@@ -195,7 +196,24 @@ function DebugFrame:Initialize()
     local reloadBtn = MedaUI:CreateButton(self.quickActions, "/reload", 60, 26)
     reloadBtn:SetPoint("LEFT", 8, 0)
     reloadBtn:SetScript("OnClick", function()
-        ReloadUI()
+        if not (MedaDebug.db and MedaDebug.db.options.confirmReload) then
+            ReloadUI()
+            return
+        end
+
+        StaticPopupDialogs["MEDADEBUG_CONFIRM_RELOAD"] = {
+            text = "Reload the UI now?",
+            button1 = "Reload",
+            button2 = "Cancel",
+            OnAccept = function()
+                ReloadUI()
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+        StaticPopup_Show("MEDADEBUG_CONFIRM_RELOAD")
     end)
 
     local gcBtn = MedaUI:CreateButton(self.quickActions, "GC", 40, 26)
@@ -224,35 +242,35 @@ function DebugFrame:Initialize()
     end)
     
     -- Settings button (right side)
-    local settingsBtn = CreateFrame("Button", nil, self.quickActions, "BackdropTemplate")
-    settingsBtn:SetSize(24, 22)
-    settingsBtn:SetPoint("RIGHT", -8, 0)
-    settingsBtn:SetBackdrop(MedaUI:CreateBackdrop(false))
-    settingsBtn:SetBackdropColor(0, 0, 0, 0)
+    local footerSettingsBtn = CreateFrame("Button", nil, self.quickActions, "BackdropTemplate")
+    footerSettingsBtn:SetSize(24, 22)
+    footerSettingsBtn:SetPoint("RIGHT", -8, 0)
+    footerSettingsBtn:SetBackdrop(MedaUI:CreateBackdrop(false))
+    footerSettingsBtn:SetBackdropColor(0, 0, 0, 0)
     
     -- Gear icon
-    settingsBtn.icon = settingsBtn:CreateTexture(nil, "OVERLAY")
-    settingsBtn.icon:SetSize(16, 16)
-    settingsBtn.icon:SetPoint("CENTER")
-    settingsBtn.icon:SetAtlas("Options")  -- Gear icon atlas
-    settingsBtn.icon:SetDesaturated(true)
-    settingsBtn.icon:SetVertexColor(unpack(Theme.textDim))
+    footerSettingsBtn.icon = footerSettingsBtn:CreateTexture(nil, "OVERLAY")
+    footerSettingsBtn.icon:SetSize(16, 16)
+    footerSettingsBtn.icon:SetPoint("CENTER")
+    footerSettingsBtn.icon:SetAtlas("Options")  -- Gear icon atlas
+    footerSettingsBtn.icon:SetDesaturated(true)
+    footerSettingsBtn.icon:SetVertexColor(unpack(Theme.textDim))
     
-    settingsBtn:SetScript("OnEnter", function(self)
-        self:SetBackdropColor(unpack(Theme.buttonHover))
-        self.icon:SetVertexColor(unpack(Theme.text))
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+    footerSettingsBtn:SetScript("OnEnter", function(button)
+        button:SetBackdropColor(unpack(Theme.buttonHover))
+        button.icon:SetVertexColor(unpack(Theme.text))
+        GameTooltip:SetOwner(button, "ANCHOR_TOP")
         GameTooltip:SetText("MedaDebug Settings")
         GameTooltip:Show()
     end)
     
-    settingsBtn:SetScript("OnLeave", function(self)
-        self:SetBackdropColor(0, 0, 0, 0)
-        self.icon:SetVertexColor(unpack(Theme.textDim))
+    footerSettingsBtn:SetScript("OnLeave", function(button)
+        button:SetBackdropColor(0, 0, 0, 0)
+        button.icon:SetVertexColor(unpack(Theme.textDim))
         GameTooltip:Hide()
     end)
     
-    settingsBtn:SetScript("OnClick", function()
+    footerSettingsBtn:SetScript("OnClick", function()
         if MedaDebug.SettingsPanel then
             MedaDebug.SettingsPanel:Toggle()
         end
@@ -298,13 +316,15 @@ function DebugFrame:Initialize()
     -- Connect to output manager for updates
     if MedaDebug.OutputManager then
         MedaDebug.OutputManager.onNewMessage = function(entry)
-            -- Refresh filter dropdown in case new addon appeared
-            if entry and entry.addon then
+            -- Rebuild filter options only when the addon set changes.
+            if entry == nil then
+                self:RefreshFilterDropdown()
+            elseif entry.addon and not self.knownMessageAddons[entry.addon] then
                 self:RefreshFilterDropdown()
             end
 
-            -- Refresh messages tab if it exists and is visible
-            if self.tabContents.messages then
+            -- Only refresh the messages UI while the tab is actually visible.
+            if self.tabContents.messages and self.activeTab == "messages" and self.frame:IsShown() then
                 if self.tabContents.messages.OnNewMessage then
                     self.tabContents.messages:OnNewMessage(entry)
                 end
@@ -323,12 +343,15 @@ function DebugFrame:Initialize()
     if MedaDebug.ErrorHandler then
         MedaDebug.ErrorHandler.onNewError = function(entry)
             pcall(function() self:UpdateErrorBadge() end)
-            if self.tabContents.errors and self.tabContents.errors.OnNewError then
+            if self.tabContents.errors and self.activeTab == "errors" and self.frame:IsShown() and self.tabContents.errors.OnNewError then
                 pcall(function() self.tabContents.errors:OnNewError(entry) end)
             end
         end
         MedaDebug.ErrorHandler.onErrorUpdated = function(entry)
             pcall(function() self:UpdateErrorBadge() end)
+            if self.tabContents.errors and self.activeTab == "errors" and self.frame:IsShown() and self.tabContents.errors.OnErrorUpdated then
+                pcall(function() self.tabContents.errors:OnErrorUpdated(entry) end)
+            end
         end
     end
 end
@@ -438,11 +461,13 @@ end
 
 function DebugFrame:RefreshFilterDropdown()
     local options = {{value = "all", label = "All Addons"}}
+    wipe(self.knownMessageAddons)
 
     -- Get addons from actual messages
     if MedaDebug.OutputManager then
         local addons = MedaDebug.OutputManager:GetAddonsFromMessages()
         for _, addon in ipairs(addons) do
+            self.knownMessageAddons[addon] = true
             options[#options + 1] = {value = addon, label = addon}
         end
     end

@@ -22,6 +22,7 @@ EventMonitor.isPaused = false
 EventMonitor.throttleData = {}
 EventMonitor.throttleInterval = 1 -- seconds
 EventMonitor.throttleThreshold = 10 -- events per second
+EventMonitor.nextEventId = 0
 
 -- Event categories
 EventMonitor.categories = {
@@ -39,6 +40,14 @@ EventMonitor.onNewEvent = nil
 
 -- Event frame
 local eventFrame = CreateFrame("Frame")
+
+local function ClearLastEntryReference(throttleData, entry)
+    for _, throttle in pairs(throttleData) do
+        if throttle.lastEntry == entry then
+            throttle.lastEntry = nil
+        end
+    end
+end
 
 --- Enable event monitoring at runtime
 function EventMonitor:Enable()
@@ -132,8 +141,9 @@ function EventMonitor:HandleEvent(event, ...)
         argCount = #args,
         category = self:GetEventCategory(event),
         throttleCount = 1,
-        id = #self.events + 1,
+        id = self.nextEventId + 1,
     }
+    self.nextEventId = entry.id
     
     -- Store reference for throttling
     throttle.lastEntry = entry
@@ -143,7 +153,10 @@ function EventMonitor:HandleEvent(event, ...)
     
     -- Trim if over limit
     while #self.events > self.maxEvents do
-        table.remove(self.events, 1)
+        local removed = table.remove(self.events, 1)
+        if removed then
+            ClearLastEntryReference(self.throttleData, removed)
+        end
     end
     
     -- Notify UI
@@ -311,4 +324,11 @@ function EventMonitor:GetWatchedCount()
         count = count + 1
     end
     return count
+end
+
+--- Update the throttle threshold at runtime
+--- @param threshold number
+function EventMonitor:SetThrottleThreshold(threshold)
+    self.throttleThreshold = math.max(1, threshold or self.throttleThreshold or 10)
+    wipe(self.throttleData)
 end

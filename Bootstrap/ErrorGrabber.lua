@@ -104,7 +104,7 @@ end
 seterrorhandler(MedaDebugErrorHandler)
 
 -- Minimal slash command that works even if UI is broken
-SLASH_MEDADEBUGERRORS1 = "/mderrors"
+_G.SLASH_MEDADEBUGERRORS1 = "/mderrors"
 SlashCmdList["MEDADEBUGERRORS"] = function(msg)
     local errors = ErrorGrabber.errors
     local count = #errors
@@ -225,9 +225,7 @@ else
     loader:SetScript("OnEvent", function(self, event, addon)
         if addon == "BugGrabber" or addon == "!BugGrabber" then
             C_Timer.After(0, function()
-                if RegisterWithBugGrabber() then
-                    -- print("|cff00ff00[MedaDebug]|r Integrated with BugGrabber")
-                end
+                RegisterWithBugGrabber()
             end)
             self:UnregisterEvent("ADDON_LOADED")
         end

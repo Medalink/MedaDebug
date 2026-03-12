@@ -3,7 +3,7 @@
     Track what changed in SavedVariables between reloads
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 
 local SVDiff = {}
 MedaDebug.SVDiff = SVDiff

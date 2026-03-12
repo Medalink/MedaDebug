@@ -3,7 +3,7 @@
     Lua REPL with output capture
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
 
 local ConsoleTab = {}
@@ -14,6 +14,20 @@ ConsoleTab.frame = nil
 ConsoleTab.history = {}
 ConsoleTab.historyIndex = 0
 ConsoleTab.output = {}
+
+local function AppendPrintOutput(printOutput, ...)
+    local args = {...}
+    local str = ""
+    for i, value in ipairs(args) do
+        str = str .. (i > 1 and "\t" or "") .. tostring(value)
+    end
+    table.insert(printOutput, str)
+end
+
+local function LoadChunk(code)
+    local loader = loadstring or load
+    return loader(code)
+end
 
 function ConsoleTab:Initialize(parent)
     self.frame = parent
@@ -55,12 +69,12 @@ function ConsoleTab:Initialize(parent)
     self.inputBox:SetTextColor(unpack(Theme.text))
     self.inputBox:SetAutoFocus(false)
     
-    self.inputBox:SetScript("OnEnterPressed", function(self)
+    self.inputBox:SetScript("OnEnterPressed", function(editBox)
         ConsoleTab:ExecuteInput()
     end)
     
-    self.inputBox:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
+    self.inputBox:SetScript("OnEscapePressed", function(editBox)
+        editBox:ClearFocus()
     end)
     
     -- History navigation
@@ -111,22 +125,21 @@ function ConsoleTab:ExecuteInput()
 end
 
 function ConsoleTab:Execute(code)
-    -- Capture print output
-    local oldPrint = print
     local printOutput = {}
-    print = function(...)
-        local args = {...}
-        local str = ""
-        for i, v in ipairs(args) do
-            str = str .. (i > 1 and "\t" or "") .. tostring(v)
-        end
-        table.insert(printOutput, str)
-    end
+    local env = setmetatable({
+        print = function(...)
+            AppendPrintOutput(printOutput, ...)
+        end,
+    }, {__index = _G})
     
     -- Try to execute as expression first (for return values)
-    local func, err = load("return " .. code)
+    local func, err = LoadChunk("return " .. code)
     if not func then
-        func, err = load(code)
+        func, err = LoadChunk(code)
+    end
+
+    if func and setfenv then
+        setfenv(func, env)
     end
     
     local success, result
@@ -136,9 +149,6 @@ function ConsoleTab:Execute(code)
         success = false
         result = err
     end
-    
-    -- Restore print
-    print = oldPrint
     
     -- Output print captures
     for _, line in ipairs(printOutput) do
@@ -151,6 +161,7 @@ function ConsoleTab:Execute(code)
             local output = self:FormatValue(result)
             self:AddOutput(output)
             _G.LAST = result
+            env.LAST = result
         end
     else
         self:AddOutput("|cffff4444Error:|r " .. tostring(result))
@@ -204,7 +215,11 @@ function ConsoleTab:AddOutput(text)
     while #self.output > 500 do
         table.remove(self.output, 1)
     end
-    
+
+    if not self.outputBlock then
+        return
+    end
+
     -- Update display
     self.outputBlock:SetText(table.concat(self.output, "\n"))
     

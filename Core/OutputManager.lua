@@ -3,7 +3,7 @@
     Routes messages to debug frame, chat, and log files
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 
 local OutputManager = {}
 MedaDebug.OutputManager = OutputManager
@@ -14,6 +14,18 @@ OutputManager.maxMessages = 1000
 
 -- Callbacks for UI updates
 OutputManager.onNewMessage = nil
+
+local function IsReloadSeparator(message)
+    if type(message) ~= "string" then
+        return false
+    end
+
+    local ok, isSeparator = pcall(function()
+        return message:match("^%-%-%-") ~= nil
+    end)
+
+    return ok and isSeparator or false
+end
 
 function OutputManager:Initialize()
     -- Load settings
@@ -204,7 +216,7 @@ function OutputManager:GetMessagesForCopy()
     local reloadIndices = {}
     for i = 1, #messages do
         local msg = messages[i]
-        if msg.message and msg.message:match("^%-%-%-") then
+        if msg and IsReloadSeparator(msg.message) then
             reloadIndices[#reloadIndices + 1] = i
         end
     end
@@ -250,7 +262,7 @@ function OutputManager:GetMessagesForCopy()
         local msg = messages[i]
         if msg and msg.message then
             -- Skip reload separators in output
-            if not msg.message:match("^%-%-%-") then
+            if not IsReloadSeparator(msg.message) then
                 local timestamp = msg.datetime or ""
                 local countSuffix = ""
                 if msg.count and msg.count > 1 then
@@ -266,4 +278,18 @@ function OutputManager:GetMessagesForCopy()
     end
 
     return table.concat(lines, "\n")
+end
+
+--- Update the in-memory message cap and trim existing messages if needed
+--- @param maxMessages number
+function OutputManager:SetMaxMessages(maxMessages)
+    self.maxMessages = math.max(1, maxMessages or self.maxMessages or 1000)
+
+    while #self.messages > self.maxMessages do
+        table.remove(self.messages, 1)
+    end
+
+    if self.onNewMessage then
+        self.onNewMessage(nil)
+    end
 end

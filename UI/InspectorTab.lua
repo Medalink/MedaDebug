@@ -3,7 +3,7 @@
     Frame inspection UI with tree navigation
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
 local Pixel = MedaUI.Pixel
 
@@ -101,14 +101,12 @@ function InspectorTab:OnFrameInspected(frame, info, isPreview)
     if not info then return end
 
     -- Update label with preview/locked indicator
-    local statusText = ""
     if isPreview then
-        statusText = "|cffFFFF00[PREVIEW]|r "
         self.frameLabel:SetTextColor(1, 1, 0)  -- Yellow for preview
     else
-        statusText = "|cff00FF00[LOCKED]|r "
         self.frameLabel:SetTextColor(0, 1, 0)  -- Green for locked
     end
+    local statusText = isPreview and "|cffFFFF00[PREVIEW]|r " or "|cff00FF00[LOCKED]|r "
     local sourceText = info.source and info.source ~= "Unknown" and (" |cff888888[" .. info.source .. "]|r") or ""
     self.frameLabel:SetText(statusText .. info.name .. " (" .. info.type .. ")" .. sourceText)
 
@@ -585,8 +583,8 @@ function InspectorTab:ShowIgnoredFramesPanel()
         closeBtn:SetText("x")
         closeBtn:GetFontString():SetTextColor(unpack(Theme.textDim))
         closeBtn:SetScript("OnClick", function() panel:Hide() end)
-        closeBtn:SetScript("OnEnter", function(self) self:GetFontString():SetTextColor(1, 0.3, 0.3) end)
-        closeBtn:SetScript("OnLeave", function(self) self:GetFontString():SetTextColor(unpack(Theme.textDim)) end)
+        closeBtn:SetScript("OnEnter", function(button) button:GetFontString():SetTextColor(1, 0.3, 0.3) end)
+        closeBtn:SetScript("OnLeave", function(button) button:GetFontString():SetTextColor(unpack(Theme.textDim)) end)
 
         -- Hint text
         local hint = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -704,13 +702,13 @@ function InspectorTab:RefreshIgnoredFramesPanel()
             removeText:Hide()
             row.removeText = removeText
 
-            row:SetScript("OnEnter", function(self)
-                self.text:SetTextColor(1, 1, 1)
-                self.removeText:Show()
+            row:SetScript("OnEnter", function(button)
+                button.text:SetTextColor(1, 1, 1)
+                button.removeText:Show()
             end)
-            row:SetScript("OnLeave", function(self)
-                self.text:SetTextColor(unpack(Theme.text))
-                self.removeText:Hide()
+            row:SetScript("OnLeave", function(button)
+                button.text:SetTextColor(unpack(Theme.text))
+                button.removeText:Hide()
             end)
             row:SetScript("OnClick", function()
                 MedaDebug.FrameInspector:RemoveIgnoredFrame(name)

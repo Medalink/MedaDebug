@@ -232,7 +232,6 @@ function SecretsTab:BuildPredicatesContent()
     -- Two-column layout
     local predicates = MedaDebug.SecretsExplorer and MedaDebug.SecretsExplorer.PREDICATES or {}
     local colWidth = 200
-    local yPos = -4
 
     for i, predicate in ipairs(predicates) do
         local col = ((i - 1) % 2)
@@ -255,10 +254,6 @@ function SecretsTab:BuildPredicatesContent()
         valueText:SetTextColor(unpack(Theme.text))
 
         self.predicateLabels[predicate] = valueText
-
-        if col == 1 then
-            yPos = thisYPos
-        end
     end
 
     -- Calculate height

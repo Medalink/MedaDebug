@@ -13,6 +13,23 @@ EventsTab.frame = nil
 EventsTab.scrollList = nil
 EventsTab.categoryFilter = "all"
 EventsTab.isPaused = false
+EventsTab.searchText = ""
+EventsTab.viewData = nil
+
+local function SafeContains(text, search)
+    if type(text) ~= "string" or search == "" then
+        return false
+    end
+
+    local ok, lowerText = pcall(function()
+        return text:lower()
+    end)
+    if not ok then
+        return false
+    end
+
+    return lowerText:find(search, 1, true) ~= nil
+end
 
 function EventsTab:Initialize(parent)
     self.frame = parent
@@ -96,14 +113,48 @@ function EventsTab:Initialize(parent)
     -- Connect to event monitor
     if MedaDebug.EventMonitor then
         MedaDebug.EventMonitor.onNewEvent = function(entry, isUpdate)
-            if not self.isPaused then
-                self:RefreshData()
+            if not self.isPaused and self.frame and self.frame:IsShown() then
+                if entry == nil then
+                    self:RefreshData()
+                elseif isUpdate then
+                    if self:MatchesFilters(entry) then
+                        self.scrollList:Refresh()
+                    else
+                        self:RefreshData()
+                    end
+                elseif not self:HasActiveSearch() and self:MatchesFilters(entry) and self.viewData then
+                    self.scrollList:AddItem(entry, MedaDebug.db and MedaDebug.db.options.autoScroll)
+                    self.countLabel:SetText(self.scrollList:GetItemCount() .. " events")
+                else
+                    self:RefreshData()
+                end
             end
         end
     end
     
     self:RefreshData()
     self:UpdateEnabledState()
+end
+
+function EventsTab:HasActiveSearch()
+    return self.searchText and self.searchText ~= ""
+end
+
+function EventsTab:MatchesFilters(entry)
+    if self.categoryFilter ~= "all" and entry.category ~= self.categoryFilter then
+        return false
+    end
+
+    if self:HasActiveSearch() then
+        local search = self.searchText:lower()
+        if not SafeContains(entry.event, search) and
+           not SafeContains(MedaDebug.EventMonitor:FormatArgs(entry.args), search) and
+           not SafeContains(entry.category, search) then
+            return false
+        end
+    end
+
+    return true
 end
 
 function EventsTab:UpdateEnabledState()
@@ -186,10 +237,19 @@ function EventsTab:RefreshData()
     if not self.scrollList or not MedaDebug.EventMonitor then return end
     
     local events = MedaDebug.EventMonitor:GetFilteredEvents(self.categoryFilter)
-    self.scrollList:SetData(events)
+    local filtered = {}
+
+    for _, event in ipairs(events) do
+        if self:MatchesFilters(event) then
+            filtered[#filtered + 1] = event
+        end
+    end
+
+    self.viewData = filtered
+    self.scrollList:SetData(self.viewData)
     
     -- Update count
-    self.countLabel:SetText(#events .. " events")
+    self.countLabel:SetText(#self.viewData .. " events")
     
     -- Auto-scroll
     if MedaDebug.db and MedaDebug.db.options.autoScroll and not self.isPaused then
@@ -223,5 +283,6 @@ function EventsTab:OnFilterChanged(filter)
 end
 
 function EventsTab:OnSearch(text)
-    -- TODO: Filter events by search
+    self.searchText = text or ""
+    self:RefreshData()
 end

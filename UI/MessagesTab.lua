@@ -3,7 +3,7 @@
     Displays debug messages from addons
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
 
 local MessagesTab = {}
@@ -13,10 +13,37 @@ MessagesTab.frame = nil
 MessagesTab.scrollList = nil
 MessagesTab.currentFilter = "all"
 MessagesTab.searchText = ""
+MessagesTab.viewData = nil
+
+local function IsReloadSeparator(message)
+    if type(message) ~= "string" then
+        return false
+    end
+
+    local ok, isSeparator = pcall(function()
+        return message:match("^%-%-%-") ~= nil
+    end)
+
+    return ok and isSeparator or false
+end
+
+local function SafeContains(text, search)
+    if type(text) ~= "string" or search == "" then
+        return false
+    end
+
+    local ok, lowerText = pcall(function()
+        return text:lower()
+    end)
+    if not ok then
+        return false
+    end
+
+    return lowerText:find(search, 1, true) ~= nil
+end
 
 function MessagesTab:Initialize(parent)
     self.frame = parent
-    local Theme = MedaUI:GetTheme()
     
     -- Create scroll list
     self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight(), {
@@ -30,6 +57,29 @@ function MessagesTab:Initialize(parent)
     
     -- Initial data load
     self:RefreshData()
+end
+
+function MessagesTab:HasActiveSearch()
+    return self.searchText and self.searchText ~= ""
+end
+
+function MessagesTab:CanIncrementallyUpdate()
+    return self.currentFilter == "all" and not self:HasActiveSearch()
+end
+
+function MessagesTab:MatchesFilters(entry)
+    if self.currentFilter ~= "all" and entry.addon ~= self.currentFilter then
+        return false
+    end
+
+    if self:HasActiveSearch() then
+        local search = self.searchText:lower()
+        if not SafeContains(entry.message, search) and not SafeContains(entry.addon, search) then
+            return false
+        end
+    end
+
+    return true
 end
 
 function MessagesTab:RenderRow(row, data, index)
@@ -68,7 +118,7 @@ function MessagesTab:RenderRow(row, data, index)
     end
 
     -- Check for reload separator
-    if data.message:match("^%-%-%-") then
+    if IsReloadSeparator(data.message) then
         row.timestamp:SetText("")
         row.addon:SetText("")
         row.message:SetText(data.message)
@@ -119,8 +169,7 @@ function MessagesTab:RefreshData()
         local filtered = {}
         local search = self.searchText:lower()
         for _, msg in ipairs(messages) do
-            if msg.message:lower():find(search, 1, true) or
-               (msg.addon and msg.addon:lower():find(search, 1, true)) then
+            if SafeContains(msg.message, search) or SafeContains(msg.addon, search) then
                 filtered[#filtered + 1] = msg
             end
         end
@@ -133,7 +182,8 @@ function MessagesTab:RefreshData()
         reversed[#reversed + 1] = messages[i]
     end
 
-    self.scrollList:SetData(reversed)
+    self.viewData = reversed
+    self.scrollList:SetData(self.viewData)
 
     -- Auto-scroll to top (newest) if enabled
     if MedaDebug.db and MedaDebug.db.options.autoScroll then
@@ -148,22 +198,29 @@ function MessagesTab:OnNewMessage(entry, isUpdate)
         return
     end
 
-    -- Check filter
-    if self.currentFilter ~= "all" and entry.addon ~= self.currentFilter then
+    if isUpdate then
+        if self:MatchesFilters(entry) then
+            self.scrollList:Refresh()
+        else
+            self:RefreshData()
+        end
         return
     end
 
-    -- Check search
-    if self.searchText and self.searchText ~= "" then
-        local search = self.searchText:lower()
-        if not entry.message:lower():find(search, 1, true) and
-           not (entry.addon and entry.addon:lower():find(search, 1, true)) then
-            return
-        end
+    if not self:CanIncrementallyUpdate() or not self.viewData then
+        self:RefreshData()
+        return
     end
 
-    -- Refresh to show new message or updated count
-    self:RefreshData()
+    table.insert(self.viewData, 1, entry)
+    while #self.viewData > MedaDebug.OutputManager:GetMessageCount() do
+        table.remove(self.viewData)
+    end
+    self.scrollList:SetData(self.viewData)
+
+    if MedaDebug.db and MedaDebug.db.options.autoScroll then
+        self.scrollList:ScrollToTop()
+    end
 end
 
 function MessagesTab:OnFilterChanged(filter)
@@ -172,7 +229,7 @@ function MessagesTab:OnFilterChanged(filter)
 end
 
 function MessagesTab:OnSearch(text)
-    self.searchText = text
+    self.searchText = text or ""
     self:RefreshData()
 end
 

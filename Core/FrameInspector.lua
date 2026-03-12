@@ -4,7 +4,7 @@
     Enhanced with techniques from MedaBinds ConfigMode
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
 
 local FrameInspector = {}
@@ -484,23 +484,15 @@ function FrameInspector:GetFrameUnderCursor()
     while frame do
         local visible = false
         local ok1, result1 = pcall(frame.IsVisible, frame)
-        if ok1 then
-            if issecretvalue and issecretvalue(result1) then
-                -- Skip secret values
-            elseif result1 then
-                visible = true
-            end
+        if ok1 and result1 and not (issecretvalue and issecretvalue(result1)) then
+            visible = true
         end
 
         if visible then
             local ok2, result2 = pcall(frame.IsMouseOver, frame)
             local isOver = false
-            if ok2 then
-                if issecretvalue and issecretvalue(result2) then
-                    -- Skip secret values
-                elseif result2 then
-                    isOver = true
-                end
+            if ok2 and result2 and not (issecretvalue and issecretvalue(result2)) then
+                isOver = true
             end
 
             if isOver then

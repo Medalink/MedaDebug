@@ -3,7 +3,7 @@
     Variable/table monitoring with live updates
 ]]
 
-local addonName, MedaDebug = ...
+local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-1.0")
 
 local WatchTab = {}
@@ -14,7 +14,6 @@ WatchTab.treeView = nil
 
 function WatchTab:Initialize(parent)
     self.frame = parent
-    local Theme = MedaUI:GetTheme()
     
     -- Add watch input
     self.addInput = MedaUI:CreateEditBox(parent, 200, 24)
@@ -66,13 +65,19 @@ function WatchTab:Initialize(parent)
     -- Connect to variable watch
     if MedaDebug.VariableWatch then
         MedaDebug.VariableWatch.onWatchUpdated = function(watch, changed)
-            self:RefreshData()
+            if self.frame and self.frame:IsShown() then
+                self:RefreshData()
+            end
         end
         MedaDebug.VariableWatch.onWatchAdded = function(watch)
-            self:RefreshData()
+            if self.frame and self.frame:IsShown() then
+                self:RefreshData()
+            end
         end
         MedaDebug.VariableWatch.onWatchRemoved = function(watch)
-            self:RefreshData()
+            if self.frame and self.frame:IsShown() then
+                self:RefreshData()
+            end
         end
     end
     
@@ -104,8 +109,6 @@ function WatchTab:RefreshData()
 end
 
 function WatchTab:BuildWatchNode(watch)
-    local Theme = MedaUI:GetTheme()
-    
     local node = {
         label = watch.path,
         watchPath = watch.path,

@@ -46,6 +46,8 @@ end
 --- Handle a new message
 --- @param entry table Message entry {timestamp, datetime, addon, level, message, levelColor, addonColor}
 function OutputManager:HandleMessage(entry)
+    local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("Output.HandleMessage", "output", entry and entry.addon)
+
     -- Check if this is a duplicate of the last message (same addon, level, and message).
     -- pcall guards against secret/tainted strings that cannot be compared.
     local lastMsg = self.messages[#self.messages]
@@ -67,6 +69,9 @@ function OutputManager:HandleMessage(entry)
         -- Notify UI of update (pass the updated message)
         if self.onNewMessage then
             self.onNewMessage(lastMsg, true)  -- true = update existing
+        end
+        if profile then
+            MedaDebug.ProfilerLite:EndSample(profile)
         end
         return
     end
@@ -108,6 +113,10 @@ function OutputManager:HandleMessage(entry)
     -- Notify UI
     if self.onNewMessage then
         self.onNewMessage(entry)
+    end
+
+    if profile then
+        MedaDebug.ProfilerLite:EndSample(profile)
     end
 end
 

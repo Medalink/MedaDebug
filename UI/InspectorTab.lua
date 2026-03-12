@@ -73,6 +73,28 @@ function InspectorTab:Initialize(parent)
         self:ShowIgnoredFramesPanel()
     end)
 
+    self.overlayCheck = MedaUI:CreateCheckbox(parent, "Overlay")
+    self.overlayCheck:SetPoint("LEFT", self.ignoredBtn, "RIGHT", 10, 0)
+    self.overlayCheck.OnValueChanged = function(_, checked)
+        if MedaDebug.FrameInspector then
+            MedaDebug.FrameInspector:SetLayoutOverlayEnabled(checked)
+            if not checked then
+                self.anchorCheck:SetChecked(false)
+            end
+        end
+    end
+
+    self.anchorCheck = MedaUI:CreateCheckbox(parent, "Anchors")
+    self.anchorCheck:SetPoint("LEFT", self.overlayCheck, "RIGHT", 10, 0)
+    self.anchorCheck.OnValueChanged = function(_, checked)
+        if MedaDebug.FrameInspector then
+            if checked then
+                self.overlayCheck:SetChecked(true)
+            end
+            MedaDebug.FrameInspector:SetAnchorOverlayEnabled(checked)
+        end
+    end
+
     -- Connect to frame inspector
     if MedaDebug.FrameInspector then
         MedaDebug.FrameInspector.onFrameInspected = function(frame, info)
@@ -82,6 +104,15 @@ function InspectorTab:Initialize(parent)
         MedaDebug.FrameInspector.onFramePreview = function(frame, info, isPreview)
             self:OnFrameInspected(frame, info, true)  -- true = preview mode
         end
+
+        MedaDebug.FrameInspector.onTraceUpdated = function(frame)
+            if self.frame and self.frame:IsShown() and frame == self.currentFrame and not self.isPreview then
+                self:OnFrameInspected(frame, MedaDebug.FrameInspector:GetFrameInfo(frame), false)
+            end
+        end
+
+        self.overlayCheck:SetChecked(MedaDebug.FrameInspector:IsLayoutOverlayEnabled())
+        self.anchorCheck:SetChecked(MedaDebug.FrameInspector:IsAnchorOverlayEnabled())
     end
 end
 
@@ -139,7 +170,42 @@ function InspectorTab:BuildTreeData(info)
             {label = "Strata: " .. tostring(info.frameStrata)},
         }
     }
+    if info.traceState then
+        propsNode.children[#propsNode.children + 1] = {
+            label = string.format("Center: %.0f, %.0f", info.traceState.centerX or 0, info.traceState.centerY or 0),
+        }
+    end
     frameNode.children[#frameNode.children + 1] = propsNode
+
+    local traceNode = {
+        label = "Trace",
+        expanded = true,
+        children = {
+            {label = "Layout Overlay: " .. (MedaDebug.FrameInspector and MedaDebug.FrameInspector:IsLayoutOverlayEnabled() and "On" or "Off")},
+            {label = "Anchor Overlay: " .. (MedaDebug.FrameInspector and MedaDebug.FrameInspector:IsAnchorOverlayEnabled() and "On" or "Off")},
+        },
+    }
+
+    if info.activity and #info.activity > 0 then
+        local historyNode = {
+            label = "Recent Activity (" .. #info.activity .. ")",
+            expanded = true,
+            children = {},
+        }
+
+        for i = 1, math.min(#info.activity, 12) do
+            local entry = info.activity[i]
+            historyNode.children[#historyNode.children + 1] = {
+                label = string.format("%s [%s] %s %s", entry.stamp or "?", entry.kind or "?", entry.label or "", entry.details or ""),
+            }
+        end
+
+        traceNode.children[#traceNode.children + 1] = historyNode
+    else
+        traceNode.children[#traceNode.children + 1] = {label = "Recent Activity: none"}
+    end
+
+    frameNode.children[#frameNode.children + 1] = traceNode
 
     -- Widget Values (type-specific)
     if info.widgetValues then
@@ -536,6 +602,19 @@ function InspectorTab:Copy()
         lines[#lines + 1] = "Preventing Secrets: " .. (secrets.isPreventingSecretValues and "Yes" or "No")
         if secrets.secretAspects and #secrets.secretAspects > 0 then
             lines[#lines + 1] = "Secret Aspects: " .. table.concat(secrets.secretAspects, ", ")
+        end
+    end
+
+    if info.activity and #info.activity > 0 then
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = "=== Recent Activity ==="
+        for i = 1, math.min(#info.activity, 12) do
+            local entry = info.activity[i]
+            lines[#lines + 1] = string.format("%s [%s] %s %s",
+                entry.stamp or "?",
+                entry.kind or "?",
+                entry.label or "",
+                entry.details or "")
         end
     end
 

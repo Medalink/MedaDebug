@@ -104,6 +104,8 @@ end
 --- @param ... Event arguments
 function EventMonitor:HandleEvent(event, ...)
     if self.isPaused then return end
+
+    local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("Event:" .. event, "event", event)
     
     local timestamp = GetTime()
     local args = {...}
@@ -124,6 +126,9 @@ function EventMonitor:HandleEvent(event, ...)
             throttle.lastEntry.throttleCount = throttle.count
             if self.onNewEvent then
                 self.onNewEvent(throttle.lastEntry, true) -- true = update
+            end
+            if profile then
+                MedaDebug.ProfilerLite:EndSample(profile)
             end
             return
         end
@@ -162,6 +167,10 @@ function EventMonitor:HandleEvent(event, ...)
     -- Notify UI
     if self.onNewEvent then
         self.onNewEvent(entry, false)
+    end
+
+    if profile then
+        MedaDebug.ProfilerLite:EndSample(profile)
     end
 end
 

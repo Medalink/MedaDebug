@@ -19,6 +19,7 @@ Libs\MedaUI\MedaUI.xml
 Core\Core.lua
 Core\API.lua
 Core\OutputManager.lua
+Core\ProfilerLite.lua
 Core\ErrorHandler.lua
 Core\SystemMonitor.lua
 Core\EventMonitor.lua
@@ -41,5 +42,6 @@ UI\SecretsTab.lua
 UI\WatchTab.lua
 UI\TimersTab.lua
 UI\SystemTab.lua
+UI\ProfilerTab.lua
 UI\ErrorNotification.lua
 UI\SettingsPanel.lua

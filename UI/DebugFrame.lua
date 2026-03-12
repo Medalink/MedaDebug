@@ -22,6 +22,7 @@ local TABS = {
     {id = "messages", label = "Msgs"},
     {id = "errors", label = "Errors", badge = 0},
     {id = "events", label = "Events"},
+    {id = "perf", label = "Perf"},
     {id = "console", label = "Console"},
     {id = "inspector", label = "Inspect"},
     {id = "secrets", label = "Secrets"},
@@ -402,6 +403,9 @@ function DebugFrame:CreateTabContent(tabId)
     elseif tabId == "events" and MedaDebug.EventsTab then
         MedaDebug.EventsTab:Initialize(tabFrame)
         module = MedaDebug.EventsTab
+    elseif tabId == "perf" and MedaDebug.ProfilerTab then
+        MedaDebug.ProfilerTab:Initialize(tabFrame)
+        module = MedaDebug.ProfilerTab
     elseif tabId == "console" and MedaDebug.ConsoleTab then
         MedaDebug.ConsoleTab:Initialize(tabFrame)
         module = MedaDebug.ConsoleTab

@@ -212,6 +212,7 @@ end
 
 function TimersTab:RefreshData()
     if not self.scrollList or not MedaDebug.TimerTracker then return end
+    local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("Timers.RefreshData", "ui", "TimersTab")
     
     local timers = MedaDebug.TimerTracker:GetFilteredTimers(self.addonFilter)
     self.scrollList:SetData(timers)
@@ -219,6 +220,10 @@ function TimersTab:RefreshData()
     -- Update count
     local total = MedaDebug.TimerTracker:GetActiveCount()
     self.countLabel:SetText("Active: " .. total)
+
+    if profile then
+        MedaDebug.ProfilerLite:EndSample(profile)
+    end
 end
 
 function TimersTab:RefreshFilterDropdown()

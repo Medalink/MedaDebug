@@ -233,12 +233,18 @@ function SystemTab:RefreshDiff()
 end
 
 function SystemTab:RefreshAll()
+    local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("System.RefreshAll", "system", "SystemTab")
+
     if MedaDebug.SystemMonitor and MedaDebug.SystemMonitor:IsEnabled() then
         MedaDebug.SystemMonitor:Update()
         self:UpdateStats(MedaDebug.SystemMonitor:GetStats())
         self:RefreshMemory()
     end
     self:RefreshDiff()
+
+    if profile then
+        MedaDebug.ProfilerLite:EndSample(profile)
+    end
 end
 
 function SystemTab:OnShow()

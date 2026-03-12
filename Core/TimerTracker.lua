@@ -151,9 +151,12 @@ end
 
 --- Register a new timer
 function TimerTracker:RegisterTimer(timerId, timerType, duration, callback, iterations, timerObj, wrappedCallback)
-    self.timerCount = math.max(self.timerCount, timerId)
-
     local sourceAddon, sourceLine = DetectSource()
+    if MedaDebug.ProfilerLite then
+        MedaDebug.ProfilerLite:RecordSample("TimerRegistered:" .. timerType, "timer", 0, sourceAddon)
+    end
+
+    self.timerCount = math.max(self.timerCount, timerId)
     local now = GetTime()
     
     local entry = {
@@ -186,6 +189,10 @@ end
 
 --- Handle timer fired
 function TimerTracker:OnTimerFired(timerId, timerType)
+    if MedaDebug.ProfilerLite then
+        MedaDebug.ProfilerLite:RecordSample("TimerFired:" .. timerType, "timer", 0)
+    end
+
     local timer = self.timers[timerId]
     if not timer or timer.type ~= timerType or timer.status ~= "active" then
         return
@@ -206,6 +213,10 @@ end
 
 --- Handle ticker tick
 function TimerTracker:OnTickerTick(timerId, tickCount, maxIterations)
+    if MedaDebug.ProfilerLite then
+        MedaDebug.ProfilerLite:RecordSample("TickerTick", "timer", 0)
+    end
+
     local timer = self.timers[timerId]
     if not timer or timer.type ~= "ticker" then
         return

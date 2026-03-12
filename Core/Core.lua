@@ -194,6 +194,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if MedaDebug.OutputManager and MedaDebug.OutputManager.Initialize then
             MedaDebug.OutputManager:Initialize()
         end
+        if MedaDebug.ProfilerLite and MedaDebug.ProfilerLite.Initialize then
+            MedaDebug.ProfilerLite:Initialize()
+        end
         if MedaDebug.FrameInspector and MedaDebug.FrameInspector.Initialize then
             MedaDebug.FrameInspector:Initialize()
         end

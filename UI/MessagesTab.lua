@@ -156,6 +156,7 @@ end
 
 function MessagesTab:RefreshData()
     if not self.scrollList or not MedaDebug.OutputManager then return end
+    local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("Messages.RefreshData", "ui", "MessagesTab")
 
     local messages
     if self.currentFilter == "all" then
@@ -188,6 +189,10 @@ function MessagesTab:RefreshData()
     -- Auto-scroll to top (newest) if enabled
     if MedaDebug.db and MedaDebug.db.options.autoScroll then
         self.scrollList:ScrollToTop()
+    end
+
+    if profile then
+        MedaDebug.ProfilerLite:EndSample(profile)
     end
 end
 

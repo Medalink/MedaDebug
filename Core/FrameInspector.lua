@@ -19,10 +19,21 @@ FrameInspector.cursorFrame = nil   -- Frame directly under cursor
 FrameInspector.navigatedFrame = nil -- Frame after user navigation (+/- keys)
 FrameInspector.helpOverlay = nil   -- Center screen help message
 FrameInspector.statusOverlay = nil -- Status message overlay
+FrameInspector.layoutOverlay = nil
+FrameInspector.layoutOverlayEnabled = false
+FrameInspector.anchorOverlayEnabled = false
+FrameInspector.anchorMarkers = nil
+FrameInspector.hookedFrames = nil
+FrameInspector.scriptThrottle = nil
+FrameInspector.activityLog = nil
+FrameInspector.activityLimit = 40
+FrameInspector.stateSnapshot = nil
+FrameInspector.traceTicker = nil
 
 -- Callbacks
 FrameInspector.onFrameInspected = nil
 FrameInspector.onFramePreview = nil  -- Called during hover for live preview
+FrameInspector.onTraceUpdated = nil
 
 -- Pulsing animation state
 local pulseTime = 0
@@ -30,6 +41,25 @@ local pulseTime = 0
 -- Throttling for frame detection
 local lastUpdateTime = 0
 local UPDATE_INTERVAL = 0.05  -- 50ms between updates
+
+local TRACE_SCRIPT_NAMES = {
+    "OnShow", "OnHide", "OnEvent", "OnUpdate", "OnClick",
+    "OnEnter", "OnLeave", "OnDragStart", "OnDragStop",
+    "OnMouseDown", "OnMouseUp", "OnKeyDown", "OnKeyUp",
+}
+
+local function SafeToString(value)
+    local ok, str = pcall(tostring, value)
+    if not ok then
+        return "<unreadable>"
+    end
+
+    if #str > 40 then
+        return str:sub(1, 40) .. "..."
+    end
+
+    return str
+end
 
 -- Default frames to ignore during inspection (full-screen overlays, etc.)
 local DEFAULT_IGNORED_FRAMES = {
@@ -120,6 +150,12 @@ function FrameInspector:GetIgnoredFrames()
 end
 
 function FrameInspector:Initialize()
+    if self.traceTicker then return end
+
+    self.hookedFrames = setmetatable({}, {__mode = "k"})
+    self.scriptThrottle = setmetatable({}, {__mode = "k"})
+    self.activityLog = {}
+
     -- Create highlight overlay with pulsing animation
     self.highlightFrame = CreateFrame("Frame", "MedaDebugInspectorHighlight", UIParent)
     self.highlightFrame:SetFrameStrata("TOOLTIP")
@@ -228,6 +264,30 @@ function FrameInspector:Initialize()
     statusText:SetPoint("CENTER")
     statusText:SetTextColor(1, 1, 1)
     self.statusOverlay.text = statusText
+
+    self.layoutOverlay = CreateFrame("Frame", "MedaDebugInspectorLayoutOverlay", UIParent, "BackdropTemplate")
+    self.layoutOverlay:SetFrameStrata("TOOLTIP")
+    self.layoutOverlay:EnableMouse(false)
+    self.layoutOverlay:SetBackdrop(MedaUI:CreateBackdrop(true))
+    self.layoutOverlay:SetBackdropColor(0, 0, 0, 0)
+    self.layoutOverlay:SetBackdropBorderColor(0.3, 0.8, 1, 0.9)
+    self.layoutOverlay:Hide()
+
+    self.layoutOverlay.infoText = self.layoutOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.layoutOverlay.infoText:SetPoint("BOTTOMLEFT", self.layoutOverlay, "TOPLEFT", 0, 4)
+    self.layoutOverlay.infoText:SetTextColor(0.5, 0.85, 1)
+
+    self.anchorMarkers = {}
+
+    if MedaDebug.db then
+        MedaDebug.db.inspector = MedaDebug.db.inspector or {}
+        self.layoutOverlayEnabled = MedaDebug.db.inspector.layoutOverlayEnabled or false
+        self.anchorOverlayEnabled = MedaDebug.db.inspector.anchorOverlayEnabled or false
+    end
+
+    self.traceTicker = C_Timer.NewTicker(0.2, function()
+        self:PollInspectedFrame()
+    end)
 end
 
 --- Show a temporary status message
@@ -458,6 +518,295 @@ function FrameInspector:StopInspectMode()
     ResetCursor()
 end
 
+function FrameInspector:GetAnchorMarker(index)
+    local marker = self.anchorMarkers[index]
+    if marker then
+        return marker
+    end
+
+    marker = CreateFrame("Frame", nil, self.layoutOverlay)
+    marker:SetSize(8, 8)
+    marker.dot = marker:CreateTexture(nil, "OVERLAY")
+    marker.dot:SetAllPoints()
+    marker.dot:SetColorTexture(0.3, 0.8, 1, 1)
+
+    marker.label = marker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    marker.label:SetPoint("LEFT", marker, "RIGHT", 4, 0)
+    marker.label:SetTextColor(0.7, 0.9, 1)
+
+    self.anchorMarkers[index] = marker
+    return marker
+end
+
+function FrameInspector:HideUnusedAnchorMarkers(startIndex)
+    for i = startIndex, #self.anchorMarkers do
+        self.anchorMarkers[i]:Hide()
+    end
+end
+
+function FrameInspector:SummarizeScriptArgs(scriptName, ...)
+    if scriptName == "OnUpdate" then
+        local elapsed = ...
+        return string.format("elapsed=%.3f", elapsed or 0)
+    end
+
+    local values = {...}
+    if scriptName == "OnEvent" and values[1] then
+        local summary = {SafeToString(values[1])}
+        for i = 2, math.min(#values, 3) do
+            summary[#summary + 1] = SafeToString(values[i])
+        end
+        return table.concat(summary, ", ")
+    end
+
+    local summary = {}
+    for i = 1, math.min(#values, 3) do
+        summary[#summary + 1] = SafeToString(values[i])
+    end
+    return table.concat(summary, ", ")
+end
+
+function FrameInspector:RecordActivity(frame, kind, label, details)
+    if frame ~= self.inspectedFrame then
+        return
+    end
+
+    local timestamp = GetTime()
+    local stamp = date("%H:%M:%S") .. string.format(".%03d", (timestamp % 1) * 1000)
+
+    table.insert(self.activityLog, 1, {
+        time = timestamp,
+        stamp = stamp,
+        kind = kind,
+        label = label,
+        details = details or "",
+    })
+
+    while #self.activityLog > self.activityLimit do
+        table.remove(self.activityLog)
+    end
+
+    if self.onTraceUpdated then
+        self.onTraceUpdated(frame, self.activityLog)
+    end
+end
+
+function FrameInspector:EnsureFrameHooks(frame)
+    if not frame or not frame.HookScript then
+        return
+    end
+
+    local frameHooks = self.hookedFrames[frame]
+    if not frameHooks then
+        frameHooks = {}
+        self.hookedFrames[frame] = frameHooks
+    end
+
+    for _, scriptName in ipairs(TRACE_SCRIPT_NAMES) do
+        if not frameHooks[scriptName] and frame:HasScript(scriptName) and frame:GetScript(scriptName) then
+            local ok = pcall(frame.HookScript, frame, scriptName, function(target, ...)
+                local now = GetTime()
+                local throttle = self.scriptThrottle[target]
+                if not throttle then
+                    throttle = {}
+                    self.scriptThrottle[target] = throttle
+                end
+
+                if scriptName == "OnUpdate" and now - (throttle[scriptName] or 0) < 0.25 then
+                    return
+                end
+                throttle[scriptName] = now
+
+                if MedaDebug.ProfilerLite then
+                    MedaDebug.ProfilerLite:RecordSample("FrameScript:" .. scriptName, "frame", 0, self:GetFrameSource(target))
+                end
+                self:RecordActivity(target, "script", scriptName, self:SummarizeScriptArgs(scriptName, ...))
+            end)
+
+            if ok then
+                frameHooks[scriptName] = true
+            end
+        end
+    end
+end
+
+function FrameInspector:SerializePoints(frame)
+    local parts = {}
+    for i = 1, frame:GetNumPoints() do
+        local point, relativeTo, relativePoint, x, y = frame:GetPoint(i)
+        parts[#parts + 1] = string.format("%s:%s:%s:%0.1f:%0.1f",
+            point or "?",
+            relativeTo and (relativeTo:GetName() or "(unnamed)") or "nil",
+            relativePoint or "?",
+            x or 0,
+            y or 0
+        )
+    end
+    return table.concat(parts, "|")
+end
+
+function FrameInspector:CaptureFrameState(frame)
+    local width = frame:GetWidth() or 0
+    local height = frame:GetHeight() or 0
+    local centerX, centerY = frame:GetCenter()
+
+    return {
+        shown = frame:IsShown(),
+        visible = frame:IsVisible(),
+        alpha = frame:GetAlpha() or 0,
+        width = width,
+        height = height,
+        centerX = centerX or 0,
+        centerY = centerY or 0,
+        frameLevel = frame.GetFrameLevel and frame:GetFrameLevel() or 0,
+        frameStrata = frame.GetFrameStrata and frame:GetFrameStrata() or "N/A",
+        pointSignature = self:SerializePoints(frame),
+    }
+end
+
+function FrameInspector:DiffState(previousState, currentState)
+    local changes = {}
+    if not previousState then
+        return changes
+    end
+
+    if previousState.shown ~= currentState.shown or previousState.visible ~= currentState.visible then
+        changes[#changes + 1] = string.format("shown=%s visible=%s", tostring(currentState.shown), tostring(currentState.visible))
+    end
+
+    if previousState.width ~= currentState.width or previousState.height ~= currentState.height then
+        changes[#changes + 1] = string.format("size %.0fx%.0f -> %.0fx%.0f",
+            previousState.width, previousState.height, currentState.width, currentState.height)
+    end
+
+    if math.abs((previousState.alpha or 0) - (currentState.alpha or 0)) >= 0.01 then
+        changes[#changes + 1] = string.format("alpha %.2f -> %.2f", previousState.alpha or 0, currentState.alpha or 0)
+    end
+
+    if previousState.frameLevel ~= currentState.frameLevel or previousState.frameStrata ~= currentState.frameStrata then
+        changes[#changes + 1] = string.format("level/strata %s/%s -> %s/%s",
+            tostring(previousState.frameLevel),
+            tostring(previousState.frameStrata),
+            tostring(currentState.frameLevel),
+            tostring(currentState.frameStrata))
+    end
+
+    if previousState.pointSignature ~= currentState.pointSignature then
+        changes[#changes + 1] = "anchor points updated"
+    end
+
+    return changes
+end
+
+function FrameInspector:GetRecentActivity()
+    return self.activityLog or {}
+end
+
+function FrameInspector:GetCurrentTraceState(frame)
+    if frame == self.inspectedFrame and self.stateSnapshot then
+        return self.stateSnapshot
+    end
+    if frame then
+        return self:CaptureFrameState(frame)
+    end
+    return nil
+end
+
+function FrameInspector:RefreshLayoutOverlay()
+    if not self.layoutOverlay then
+        return
+    end
+
+    local frame = self.inspectedFrame
+    if not self.layoutOverlayEnabled or not frame or not frame:IsShown() then
+        self.layoutOverlay:Hide()
+        self:HideUnusedAnchorMarkers(1)
+        return
+    end
+
+    self.layoutOverlay:ClearAllPoints()
+    self.layoutOverlay:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    self.layoutOverlay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+    self.layoutOverlay.infoText:SetText(string.format("%s | %.0fx%.0f | %s/%s",
+        frame:GetName() or "(unnamed)",
+        frame:GetWidth() or 0,
+        frame:GetHeight() or 0,
+        tostring(frame.GetFrameStrata and frame:GetFrameStrata() or "N/A"),
+        tostring(frame.GetFrameLevel and frame:GetFrameLevel() or "N/A")))
+    self.layoutOverlay:Show()
+
+    if not self.anchorOverlayEnabled then
+        self:HideUnusedAnchorMarkers(1)
+        return
+    end
+
+    local markerCount = 0
+    for i = 1, frame:GetNumPoints() do
+        local point, relativeTo, relativePoint, x, y = frame:GetPoint(i)
+        markerCount = markerCount + 1
+        local marker = self:GetAnchorMarker(markerCount)
+        marker:ClearAllPoints()
+        marker:SetPoint(point or "CENTER", self.layoutOverlay, point or "CENTER", 0, 0)
+        marker.label:SetText(string.format("%s -> %s:%s (%.0f, %.0f)",
+            point or "?",
+            relativeTo and (relativeTo:GetName() or "(unnamed)") or "nil",
+            relativePoint or "?",
+            x or 0,
+            y or 0))
+        marker:Show()
+    end
+
+    self:HideUnusedAnchorMarkers(markerCount + 1)
+end
+
+function FrameInspector:PollInspectedFrame()
+    local frame = self.inspectedFrame
+    if not frame then
+        self:RefreshLayoutOverlay()
+        return
+    end
+
+    local currentState = self:CaptureFrameState(frame)
+    local changes = self:DiffState(self.stateSnapshot, currentState)
+    self.stateSnapshot = currentState
+
+    for _, change in ipairs(changes) do
+        self:RecordActivity(frame, "state", "State Change", change)
+    end
+
+    self:RefreshLayoutOverlay()
+end
+
+function FrameInspector:SetLayoutOverlayEnabled(enabled)
+    self.layoutOverlayEnabled = enabled and true or false
+    if MedaDebug.db then
+        MedaDebug.db.inspector = MedaDebug.db.inspector or {}
+        MedaDebug.db.inspector.layoutOverlayEnabled = self.layoutOverlayEnabled
+    end
+    self:RefreshLayoutOverlay()
+end
+
+function FrameInspector:SetAnchorOverlayEnabled(enabled)
+    self.anchorOverlayEnabled = enabled and true or false
+    if self.anchorOverlayEnabled then
+        self.layoutOverlayEnabled = true
+    end
+    if MedaDebug.db then
+        MedaDebug.db.inspector = MedaDebug.db.inspector or {}
+        MedaDebug.db.inspector.layoutOverlayEnabled = self.layoutOverlayEnabled
+        MedaDebug.db.inspector.anchorOverlayEnabled = self.anchorOverlayEnabled
+    end
+    self:RefreshLayoutOverlay()
+end
+
+function FrameInspector:IsLayoutOverlayEnabled()
+    return self.layoutOverlayEnabled
+end
+
+function FrameInspector:IsAnchorOverlayEnabled()
+    return self.anchorOverlayEnabled
+end
+
 --- Get frame under cursor
 --- Uses both IsMouseOver and position-based detection for EnableMouse(false) frames
 --- @return Frame|nil
@@ -671,6 +1020,11 @@ end
 --- @param frame Frame The frame to inspect
 function FrameInspector:InspectFrame(frame)
     self.inspectedFrame = frame
+    self.activityLog = {}
+    self.stateSnapshot = self:CaptureFrameState(frame)
+    self:EnsureFrameHooks(frame)
+    self:RecordActivity(frame, "inspect", "Inspect", frame:GetName() or "(unnamed)")
+    self:RefreshLayoutOverlay()
     
     -- Store in global for console access
     _G.INSPECTED = frame
@@ -691,6 +1045,7 @@ end
 --- @return table Frame information
 function FrameInspector:GetFrameInfo(frame)
     if not frame then return nil end
+    local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("FrameInspector.GetFrameInfo", "frame", self:GetFrameSource(frame))
 
     local objType = frame:GetObjectType()
 
@@ -725,6 +1080,10 @@ function FrameInspector:GetFrameInfo(frame)
 
         -- Widget-specific values
         widgetValues = {},
+
+        -- Trace data
+        traceState = self:GetCurrentTraceState(frame),
+        activity = self:GetRecentActivity(),
     }
 
     -- Helper to safely get values that might be secrets
@@ -955,6 +1314,10 @@ function FrameInspector:GetFrameInfo(frame)
         info.secrets = MedaDebug.SecretsExplorer:GetWidgetSecretInfo(frame)
     end
 
+    if profile then
+        MedaDebug.ProfilerLite:EndSample(profile)
+    end
+
     return info
 end
 
@@ -1008,8 +1371,11 @@ end
 --- Show anchor lines for a frame
 --- @param frame Frame The frame
 function FrameInspector:ShowAnchors(frame)
-    -- TODO: Draw lines from frame to its anchor points
-    -- This would require creating line textures
+    if frame then
+        self.inspectedFrame = frame
+    end
+    self:SetLayoutOverlayEnabled(true)
+    self:SetAnchorOverlayEnabled(true)
 end
 
 --- Get currently inspected frame

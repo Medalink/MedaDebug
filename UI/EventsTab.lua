@@ -235,6 +235,7 @@ end
 
 function EventsTab:RefreshData()
     if not self.scrollList or not MedaDebug.EventMonitor then return end
+    local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("Events.RefreshData", "ui", "EventsTab")
     
     local events = MedaDebug.EventMonitor:GetFilteredEvents(self.categoryFilter)
     local filtered = {}
@@ -254,6 +255,10 @@ function EventsTab:RefreshData()
     -- Auto-scroll
     if MedaDebug.db and MedaDebug.db.options.autoScroll and not self.isPaused then
         self.scrollList:ScrollToBottom()
+    end
+
+    if profile then
+        MedaDebug.ProfilerLite:EndSample(profile)
     end
 end
 

@@ -237,6 +237,7 @@ end
 
 function ErrorsTab:RefreshData()
     if not self.scrollList or not MedaDebug.ErrorHandler then return end
+    local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("Errors.RefreshData", "ui", "ErrorsTab")
     
     local errors = MedaDebug.ErrorHandler:GetErrors()
     local filtered = {}
@@ -262,6 +263,10 @@ function ErrorsTab:RefreshData()
             self.statusBar:Hide()
             self.scrollList:SetPoint("TOPLEFT", 0, 0)
         end
+    end
+
+    if profile then
+        MedaDebug.ProfilerLite:EndSample(profile)
     end
 end
 

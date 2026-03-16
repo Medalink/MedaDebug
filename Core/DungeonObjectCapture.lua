@@ -111,6 +111,16 @@ local function BuildMonitoredUnits(trackParty)
     return units
 end
 
+local function SafeRegisterEvent(frame, eventName)
+    local ok, err = pcall(frame.RegisterEvent, frame, eventName)
+    if ok then
+        return true
+    end
+
+    MedaDebug:LogInternal("MedaDebug", string.format("Dungeon object capture could not register event %s: %s", tostring(eventName), tostring(err)), "WARN")
+    return false
+end
+
 local function GetInstanceContext()
     local instanceName, instanceType, difficultyID, difficultyName, maxPlayers, dynamicDifficulty, isDynamic, instanceID, instanceGroupSize = GetInstanceInfo()
     local mapID = C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player") or nil
@@ -138,6 +148,13 @@ local function GetInstanceContext()
         positionX = positionX,
         positionY = positionY,
     }
+end
+
+local function IsDungeonInstanceContext(context)
+    return context
+        and context.instanceType == "party"
+        and context.instanceID
+        and context.instanceID > 0
 end
 
 local function BuildPositionText(context)
@@ -286,7 +303,7 @@ function DungeonObjectCapture:LoadOptions()
     self.correlationWindow = math.max(1, options.dungeonCaptureWindow or 5)
     self.maxEntries = math.max(20, options.dungeonCaptureMaxEntries or 200)
     self.trackPartyAuras = options.dungeonCaptureTrackPartyAuras ~= false
-    self.includeCombatLog = options.dungeonCaptureIncludeCombatLog ~= false
+    self.includeCombatLog = false
 end
 
 function DungeonObjectCapture:EnsureInitialized()
@@ -307,27 +324,26 @@ function DungeonObjectCapture:EnsureInitialized()
             self:HandleUnitAura(...)
         elseif event == "CHAT_MSG_LOOT" then
             self:HandleLootMessage(...)
-        elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-            self:HandleCombatLog()
         elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
             self:PrimeAuraState()
             self:ExpireOldCaptures(GetTime())
+            if event == "PLAYER_ENTERING_WORLD" then
+                local instance = GetInstanceContext()
+                if not IsDungeonInstanceContext(instance) then
+                    self:ResetRecentContext()
+                end
+            end
         end
     end)
 end
 
 function DungeonObjectCapture:RegisterEvents()
-    eventFrame:RegisterEvent("WORLD_CURSOR_TOOLTIP_UPDATE")
-    eventFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
-    eventFrame:RegisterEvent("UNIT_AURA")
-    eventFrame:RegisterEvent("CHAT_MSG_LOOT")
-    eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    if self.includeCombatLog then
-        eventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-    else
-        eventFrame:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-    end
+    SafeRegisterEvent(eventFrame, "WORLD_CURSOR_TOOLTIP_UPDATE")
+    SafeRegisterEvent(eventFrame, "UPDATE_MOUSEOVER_UNIT")
+    SafeRegisterEvent(eventFrame, "UNIT_AURA")
+    SafeRegisterEvent(eventFrame, "CHAT_MSG_LOOT")
+    SafeRegisterEvent(eventFrame, "GROUP_ROSTER_UPDATE")
+    SafeRegisterEvent(eventFrame, "PLAYER_ENTERING_WORLD")
 end
 
 function DungeonObjectCapture:Enable()
@@ -403,6 +419,10 @@ function DungeonObjectCapture:PrimeAuraState()
             self.unitAuraState[unit] = self:SnapshotHelpfulAuras(unit)
         end
     end
+end
+
+function DungeonObjectCapture:ResetRecentContext()
+    wipe(self.recentContexts)
 end
 
 function DungeonObjectCapture:SnapshotHelpfulAuras(unit)
@@ -489,6 +509,9 @@ function DungeonObjectCapture:BuildTooltipContext(source, data, extra)
     local guid = data.guid or data.objectGUID or data.unitGUID
     local guidType, entryID = ParseGuidInfo(guid)
     local instance = GetInstanceContext()
+    if not IsDungeonInstanceContext(instance) then
+        return nil
+    end
 
     return {
         timestamp = GetTime(),
@@ -713,35 +736,6 @@ function DungeonObjectCapture:HandleLootMessage(message)
     })
 end
 
-function DungeonObjectCapture:HandleCombatLog()
-    if not self.isEnabled then
-        return
-    end
-
-    local timestamp, subevent, _, sourceGUID, sourceName, sourceFlags, _, destGUID, destName, destFlags, _, spellId, spellName = CombatLogGetCurrentEventInfo()
-    if subevent ~= "SPELL_AURA_APPLIED" and subevent ~= "SPELL_CAST_SUCCESS" then
-        return
-    end
-
-    if not self:IsGroupGuid(destGUID) and not self:IsGroupGuid(sourceGUID) then
-        return
-    end
-
-    self:AddOutcome("combat_log", {
-        label = string.format("%s %s", subevent, spellName or ("Spell " .. tostring(spellId))),
-        subevent = subevent,
-        spellId = spellId,
-        name = spellName,
-        sourceGUID = sourceGUID,
-        sourceName = sourceName,
-        sourceFlags = sourceFlags,
-        destGUID = destGUID,
-        destName = destName,
-        destFlags = destFlags,
-        combatTimestamp = timestamp,
-    })
-end
-
 function DungeonObjectCapture:BuildCaptureReport(capture)
     if not capture then
         return "No capture selected."
@@ -911,16 +905,13 @@ if MedaDebug.SettingsRegistry then
             end
             yOff = yOff - 28
 
-            local combatCheckbox = MedaUI:CreateCheckbox(parent, "Correlate combat log spell applications")
-            combatCheckbox:SetPoint("TOPLEFT", 12, yOff)
-            combatCheckbox:SetChecked(options.dungeonCaptureIncludeCombatLog ~= false)
-            combatCheckbox.OnValueChanged = function(_, checked)
-                options.dungeonCaptureIncludeCombatLog = checked
-                DungeonObjectCapture.includeCombatLog = checked
-                if DungeonObjectCapture.isEnabled then
-                    DungeonObjectCapture:RegisterEvents()
-                end
-            end
+            local combatNote = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            combatNote:SetPoint("TOPLEFT", 12, yOff)
+            combatNote:SetPoint("RIGHT", parent, "RIGHT", -16, 0)
+            combatNote:SetJustifyH("LEFT")
+            combatNote:SetWordWrap(true)
+            combatNote:SetText("Combat-log correlation is disabled for now because this client throws a Blizzard popup when `COMBAT_LOG_EVENT_UNFILTERED` is registered from this module.")
+            combatNote:SetTextColor(unpack(MedaUI.Theme.warning))
 
             return 360
         end,

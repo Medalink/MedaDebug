@@ -16,8 +16,10 @@ Bootstrap\ErrorGrabber.lua
 Libs\MedaUI\MedaUI.xml
 
 # Core modules
-Core\Core.lua
+Core\Bootstrap.lua
 Core\API.lua
+Core\RuntimeRegistry.lua
+Core\SettingsRegistry.lua
 Core\OutputManager.lua
 Core\ProfilerLite.lua
 Core\ErrorHandler.lua
@@ -28,11 +30,13 @@ Core\VariableWatch.lua
 Core\SecretsExplorer.lua
 Core\SVDiff.lua
 Core\TimerTracker.lua
+Core\Commands.lua
+Core\SuiteSettings.lua
+Core\SettingsHost.lua
 
 # UI modules
-UI\DebugFrame.lua
-UI\QuickActions.lua
-UI\SearchBar.lua
+UI\WorkspaceRegistry.lua
+UI\MainHost.lua
 UI\MessagesTab.lua
 UI\ErrorsTab.lua
 UI\EventsTab.lua
@@ -44,4 +48,4 @@ UI\TimersTab.lua
 UI\SystemTab.lua
 UI\ProfilerTab.lua
 UI\ErrorNotification.lua
-UI\SettingsPanel.lua
+Core\Lifecycle.lua

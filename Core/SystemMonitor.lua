@@ -4,6 +4,7 @@
 ]]
 
 local addonName, MedaDebug = ...
+local MedaUI = LibStub("MedaUI-2.0")
 
 local SystemMonitor = {}
 MedaDebug.SystemMonitor = SystemMonitor
@@ -235,4 +236,78 @@ function SystemMonitor:SetUpdateInterval(interval)
     if self.updateTimer then
         self:StartUpdates()
     end
+end
+
+function SystemMonitor:SetMemoryUpdateInterval(interval)
+    self.memoryUpdateInterval = math.max(1, interval or self.memoryUpdateInterval or 10)
+end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("SystemMonitor", {
+        order = 80,
+        optionKey = "enableSystemMonitor",
+    })
+end
+
+if MedaDebug.SettingsRegistry then
+    MedaDebug.SettingsRegistry:RegisterModule("system-monitor", {
+        title = "System Monitor",
+        description = "Polling cadence and memory inspection behavior for runtime health checks.",
+        sidebarGroup = "Settings",
+        sidebarOrder = 40,
+        sidebarLabel = "System Monitor",
+        entryType = "module",
+        getEnabled = function()
+            return MedaDebug.db and MedaDebug.db.options.enableSystemMonitor or false
+        end,
+        setEnabled = function(enabled)
+            MedaDebug.db.options.enableSystemMonitor = enabled
+            if enabled then
+                SystemMonitor:Enable()
+            else
+                SystemMonitor:Disable()
+            end
+        end,
+        pages = {
+            { id = "system-monitor", label = "System Monitor" },
+        },
+        pageHeights = {
+            ["system-monitor"] = 280,
+        },
+        buildPage = function(_, parent)
+            local options = MedaDebug.db and MedaDebug.db.options or {}
+            local yOff = 0
+
+            local header = MedaUI:CreateSectionHeader(parent, "System Monitor", 470)
+            header:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 38
+
+            local updateSlider = MedaUI:CreateLabeledSlider(parent, "Stat Update Interval", 220, 0.5, 5, 0.5)
+            updateSlider:SetPoint("TOPLEFT", 12, yOff)
+            updateSlider:SetValue(options.systemUpdateInterval or 1)
+            updateSlider.OnValueChanged = function(_, value)
+                options.systemUpdateInterval = value
+                SystemMonitor:SetUpdateInterval(value)
+            end
+            yOff = yOff - 62
+
+            local memorySlider = MedaUI:CreateLabeledSlider(parent, "Memory Scan Interval", 220, 1, 30, 1)
+            memorySlider:SetPoint("TOPLEFT", 12, yOff)
+            memorySlider:SetValue(options.memoryUpdateInterval or 10)
+            memorySlider.OnValueChanged = function(_, value)
+                options.memoryUpdateInterval = value
+                SystemMonitor:SetMemoryUpdateInterval(value)
+            end
+            yOff = yOff - 62
+
+            local memoryCheckbox = MedaUI:CreateCheckbox(parent, "Show memory breakdown by addon")
+            memoryCheckbox:SetPoint("TOPLEFT", 12, yOff)
+            memoryCheckbox:SetChecked(options.showMemoryBreakdown)
+            memoryCheckbox.OnValueChanged = function(_, checked)
+                options.showMemoryBreakdown = checked
+            end
+
+            return 280
+        end,
+    })
 end

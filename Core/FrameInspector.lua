@@ -5,7 +5,7 @@
 ]]
 
 local _, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 
 local FrameInspector = {}
 MedaDebug.FrameInspector = FrameInspector
@@ -1392,4 +1392,10 @@ end
 --- @return Frame|nil
 function FrameInspector:GetInspectedFrame()
     return self.inspectedFrame
+end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("FrameInspector", {
+        order = 40,
+    })
 end

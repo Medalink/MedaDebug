@@ -294,3 +294,9 @@ function SVDiff:GetChangeCount()
     end
     return count
 end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("SVDiff", {
+        order = 60,
+    })
+end

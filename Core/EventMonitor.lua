@@ -4,6 +4,7 @@
 ]]
 
 local addonName, MedaDebug = ...
+local MedaUI = LibStub("MedaUI-2.0")
 
 local EventMonitor = {}
 MedaDebug.EventMonitor = EventMonitor
@@ -34,6 +35,7 @@ EventMonitor.categories = {
     ui = {"UI_ERROR_MESSAGE", "UI_INFO_MESSAGE", "CURSOR_CHANGED", "MODIFIER_STATE_CHANGED"},
     player = {"PLAYER_LOGIN", "PLAYER_LOGOUT", "PLAYER_ENTERING_WORLD", "PLAYER_LEAVING_WORLD", "ZONE_CHANGED"},
 }
+EventMonitor.eventCategoryLookup = {}
 
 -- Callbacks
 EventMonitor.onNewEvent = nil
@@ -41,10 +43,50 @@ EventMonitor.onNewEvent = nil
 -- Event frame
 local eventFrame = CreateFrame("Frame")
 
+local function BuildSearchText(value)
+    if type(value) ~= "string" or value == "" then
+        return nil
+    end
+
+    return value:lower()
+end
+
+local function BuildDisplayArgs(args)
+    if not args or #args == 0 then
+        return "(no args)"
+    end
+
+    local parts = {}
+    for i, arg in ipairs(args) do
+        local str
+        if type(arg) == "string" then
+            str = '"' .. arg:sub(1, 30) .. (arg:len() > 30 and "..." or "") .. '"'
+        elseif type(arg) == "table" then
+            str = "{table}"
+        elseif type(arg) == "boolean" then
+            str = arg and "true" or "false"
+        else
+            str = tostring(arg)
+        end
+        parts[#parts + 1] = str
+    end
+
+    return table.concat(parts, ", ")
+end
+
 local function ClearLastEntryReference(throttleData, entry)
     for _, throttle in pairs(throttleData) do
         if throttle.lastEntry == entry then
             throttle.lastEntry = nil
+        end
+    end
+end
+
+local function RebuildEventCategoryLookup(self)
+    wipe(self.eventCategoryLookup)
+    for category, events in pairs(self.categories) do
+        for i = 1, #events do
+            self.eventCategoryLookup[events[i]] = category
         end
     end
 end
@@ -76,6 +118,7 @@ end
 function EventMonitor:Initialize()
     if self.isEnabled then return end
     self.isEnabled = true
+    RebuildEventCategoryLookup(self)
     
     -- Load settings
     if MedaDebug.db then
@@ -138,13 +181,19 @@ function EventMonitor:HandleEvent(event, ...)
     end
     
     -- Create event entry
+    local category = self:GetEventCategory(event)
+    local displayArgs = BuildDisplayArgs(args)
     local entry = {
         timestamp = timestamp,
         datetime = date("%H:%M:%S") .. string.format(".%03d", (timestamp % 1) * 1000),
         event = event,
         args = args,
         argCount = #args,
-        category = self:GetEventCategory(event),
+        category = category,
+        displayArgs = displayArgs,
+        searchArgs = BuildSearchText(displayArgs),
+        searchEvent = BuildSearchText(event),
+        searchCategory = BuildSearchText(category),
         throttleCount = 1,
         id = self.nextEventId + 1,
     }
@@ -178,12 +227,7 @@ end
 --- @param event string Event name
 --- @return string Category name
 function EventMonitor:GetEventCategory(event)
-    for cat, events in pairs(self.categories) do
-        for _, e in ipairs(events) do
-            if e == event then return cat end
-        end
-    end
-    return "other"
+    return self.eventCategoryLookup[event] or "other"
 end
 
 --- Watch a specific event
@@ -296,26 +340,7 @@ end
 --- @param args table Event arguments
 --- @return string Formatted args
 function EventMonitor:FormatArgs(args)
-    if not args or #args == 0 then
-        return "(no args)"
-    end
-    
-    local parts = {}
-    for i, arg in ipairs(args) do
-        local str
-        if type(arg) == "string" then
-            str = '"' .. arg:sub(1, 30) .. (arg:len() > 30 and "..." or "") .. '"'
-        elseif type(arg) == "table" then
-            str = "{table}"
-        elseif type(arg) == "boolean" then
-            str = arg and "true" or "false"
-        else
-            str = tostring(arg)
-        end
-        parts[#parts + 1] = str
-    end
-    
-    return table.concat(parts, ", ")
+    return BuildDisplayArgs(args)
 end
 
 --- Check if event is being watched
@@ -340,4 +365,98 @@ end
 function EventMonitor:SetThrottleThreshold(threshold)
     self.throttleThreshold = math.max(1, threshold or self.throttleThreshold or 10)
     wipe(self.throttleData)
+end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("EventMonitor", {
+        order = 90,
+        optionKey = "enableEventMonitor",
+    })
+end
+
+if MedaDebug.SettingsRegistry then
+    MedaDebug.SettingsRegistry:RegisterModule("event-monitor", {
+        title = "Event Monitor",
+        description = "Live event capture settings and category registration.",
+        sidebarGroup = "Settings",
+        sidebarOrder = 30,
+        sidebarLabel = "Event Monitor",
+        entryType = "module",
+        getEnabled = function()
+            return MedaDebug.db and MedaDebug.db.options.enableEventMonitor or false
+        end,
+        setEnabled = function(enabled)
+            MedaDebug.db.options.enableEventMonitor = enabled
+            if enabled then
+                EventMonitor:Enable()
+            else
+                EventMonitor:Disable()
+            end
+        end,
+        pages = {
+            { id = "event-monitor", label = "Event Monitor" },
+        },
+        pageHeights = {
+            ["event-monitor"] = 420,
+        },
+        buildPage = function(_, parent)
+            local options = MedaDebug.db and MedaDebug.db.options or {}
+            local yOff = 0
+
+            local header = MedaUI:CreateSectionHeader(parent, "Event Monitor", 470)
+            header:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 38
+
+            local infoLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            infoLabel:SetPoint("TOPLEFT", 12, yOff)
+            infoLabel:SetText("Enable only for focused captures. High event rates can generate heavy churn.")
+            infoLabel:SetTextColor(unpack(MedaUI.Theme.warning))
+            yOff = yOff - 24
+
+            local throttleSlider = MedaUI:CreateLabeledSlider(parent, "Throttle (events/sec)", 220, 1, 50, 1)
+            throttleSlider:SetPoint("TOPLEFT", 12, yOff)
+            throttleSlider:SetValue(options.eventThrottle or 10)
+            throttleSlider.OnValueChanged = function(_, value)
+                options.eventThrottle = value
+                EventMonitor:SetThrottleThreshold(value)
+            end
+            yOff = yOff - 62
+
+            local maxEventsSlider = MedaUI:CreateLabeledSlider(parent, "Retained Events", 220, 100, 2000, 100)
+            maxEventsSlider:SetPoint("TOPLEFT", 12, yOff)
+            maxEventsSlider:SetValue(options.maxEvents or 500)
+            maxEventsSlider.OnValueChanged = function(_, value)
+                options.maxEvents = value
+                EventMonitor.maxEvents = value
+            end
+            yOff = yOff - 62
+
+            local categoryHeader = MedaUI:CreateSectionHeader(parent, "Default Categories", 470)
+            categoryHeader:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 38
+
+            local categoryDefs = {
+                { key = "addon", label = "Addon events" },
+                { key = "player", label = "Player events" },
+                { key = "ui", label = "UI events" },
+                { key = "unit", label = "Unit events" },
+                { key = "combat", label = "Combat events" },
+                { key = "spell", label = "Spell events" },
+                { key = "bag", label = "Bag events" },
+            }
+
+            for i = 1, #categoryDefs do
+                local category = categoryDefs[i]
+                local checkbox = MedaUI:CreateCheckbox(parent, category.label)
+                checkbox:SetPoint("TOPLEFT", 12, yOff)
+                checkbox:SetChecked(options.eventCategories and options.eventCategories[category.key])
+                checkbox.OnValueChanged = function(_, checked)
+                    options.eventCategories[category.key] = checked
+                end
+                yOff = yOff - 28
+            end
+
+            return 420
+        end,
+    })
 end

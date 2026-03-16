@@ -4,6 +4,7 @@
 ]]
 
 local _, MedaDebug = ...
+local MedaUI = LibStub("MedaUI-2.0")
 
 local TimerTracker = {}
 MedaDebug.TimerTracker = TimerTracker
@@ -382,4 +383,56 @@ function TimerTracker:GetAddonsWithTimers()
     
     table.sort(addons)
     return addons
+end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("TimerTracker", {
+        order = 100,
+        optionKey = "enableTimerTracking",
+    })
+end
+
+if MedaDebug.SettingsRegistry then
+    MedaDebug.SettingsRegistry:RegisterModule("timer-tracker", {
+        title = "Timer Tracker",
+        description = "Controls for `C_Timer` instrumentation and retained timer display.",
+        sidebarGroup = "Settings",
+        sidebarOrder = 50,
+        sidebarLabel = "Timer Tracker",
+        entryType = "module",
+        getEnabled = function()
+            return MedaDebug.db and MedaDebug.db.options.enableTimerTracking or false
+        end,
+        setEnabled = function(enabled)
+            MedaDebug.db.options.enableTimerTracking = enabled
+            if enabled then
+                TimerTracker:Enable()
+            else
+                TimerTracker:Disable()
+            end
+        end,
+        pages = {
+            { id = "timer-tracker", label = "Timer Tracker" },
+        },
+        pageHeights = {
+            ["timer-tracker"] = 180,
+        },
+        buildPage = function(_, parent)
+            local yOff = 0
+
+            local header = MedaUI:CreateSectionHeader(parent, "Timer Tracker", 470)
+            header:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 38
+
+            local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            label:SetPoint("TOPLEFT", 12, yOff)
+            label:SetPoint("RIGHT", parent, "RIGHT", -24, 0)
+            label:SetJustifyH("LEFT")
+            label:SetWordWrap(true)
+            label:SetText("Hooks `C_Timer.After`, `C_Timer.NewTimer`, and `C_Timer.NewTicker`. Keep this disabled unless you are actively inspecting timer churn.")
+            label:SetTextColor(unpack(MedaUI.Theme.warning))
+
+            return 180
+        end,
+    })
 end

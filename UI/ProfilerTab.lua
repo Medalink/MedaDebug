@@ -4,7 +4,7 @@
 ]]
 
 local _, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 
 local ProfilerTab = {}
 MedaDebug.ProfilerTab = ProfilerTab
@@ -212,4 +212,19 @@ function ProfilerTab:Clear()
     if MedaDebug.ProfilerLite then
         MedaDebug.ProfilerLite:Clear()
     end
+end
+
+if MedaDebug.WorkspaceRegistry then
+    MedaDebug.WorkspaceRegistry:RegisterPage("perf", {
+        label = "Profiler",
+        title = "Profiler",
+        subtitle = "Lightweight timings for MedaDebug hot paths.",
+        summary = "Use this to inspect UI, timer, and output costs while the workspace is open.",
+        moduleKey = "ProfilerTab",
+        height = 1000,
+        groupId = "runtime",
+        groupLabel = "Runtime",
+        groupOrder = 30,
+        pageOrder = 10,
+    })
 end

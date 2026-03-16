@@ -10,6 +10,7 @@ MedaDebug.OutputManager = OutputManager
 
 -- Message storage
 OutputManager.messages = {}
+OutputManager.newestMessages = {}
 OutputManager.maxMessages = 1000
 
 -- Callbacks for UI updates
@@ -27,6 +28,74 @@ local function IsReloadSeparator(message)
     return ok and isSeparator or false
 end
 
+local function BuildDisplayMessage(message)
+    if type(message) ~= "string" then
+        return tostring(message or "")
+    end
+
+    if IsReloadSeparator(message) then
+        return message
+    end
+
+    local ok, displayMessage = pcall(function()
+        if #message <= 180 then
+            return message
+        end
+
+        return message:sub(1, 177) .. "..."
+    end)
+
+    if ok and type(displayMessage) == "string" then
+        return displayMessage
+    end
+
+    return "(message unavailable)"
+end
+
+local function BuildSearchText(value)
+    if type(value) ~= "string" or value == "" then
+        return nil
+    end
+
+    local ok, lowered = pcall(function()
+        return value:lower()
+    end)
+
+    if ok and type(lowered) == "string" then
+        return lowered
+    end
+
+    return nil
+end
+
+local function BuildCountText(count)
+    if count and count >= 3 then
+        return "|cffFFAA00x" .. count .. "|r"
+    end
+
+    return ""
+end
+
+local function NormalizeEntryForUI(entry)
+    if not entry then
+        return
+    end
+
+    entry.isReloadSeparator = IsReloadSeparator(entry.message)
+    entry.displayMessage = BuildDisplayMessage(entry.message)
+    entry.addonLabel = "[" .. (entry.addon or "?") .. "]"
+    entry.searchMessage = BuildSearchText(entry.message)
+    entry.searchAddon = BuildSearchText(entry.addon) or ""
+    entry.countText = BuildCountText(entry.count)
+end
+
+local function RebuildNewestMessages(messages, newestMessages)
+    wipe(newestMessages)
+    for i = #messages, 1, -1 do
+        newestMessages[#newestMessages + 1] = messages[i]
+    end
+end
+
 function OutputManager:Initialize()
     -- Load settings
     if MedaDebug.db then
@@ -37,8 +106,10 @@ function OutputManager:Initialize()
     if MedaDebug.db and MedaDebug.db.options.restoreSessionData then
         if MedaDebug.log and MedaDebug.log.session and MedaDebug.log.session.messages then
             for _, msg in ipairs(MedaDebug.log.session.messages) do
+                NormalizeEntryForUI(msg)
                 self.messages[#self.messages + 1] = msg
             end
+            RebuildNewestMessages(self.messages, self.newestMessages)
         end
     end
 end
@@ -62,9 +133,13 @@ function OutputManager:HandleMessage(entry)
     end
     if isDuplicate then
         -- Increment count on existing message
+        if not lastMsg.displayMessage then
+            NormalizeEntryForUI(lastMsg)
+        end
         lastMsg.count = (lastMsg.count or 1) + 1
         lastMsg.lastTimestamp = entry.timestamp
         lastMsg.lastDatetime = entry.datetime
+        lastMsg.countText = BuildCountText(lastMsg.count)
 
         -- Notify UI of update (pass the updated message)
         if self.onNewMessage then
@@ -78,11 +153,14 @@ function OutputManager:HandleMessage(entry)
 
     -- New unique message
     entry.count = 1
+    NormalizeEntryForUI(entry)
     self.messages[#self.messages + 1] = entry
+    table.insert(self.newestMessages, 1, entry)
 
     -- Trim if over limit
     while #self.messages > self.maxMessages do
         table.remove(self.messages, 1)
+        table.remove(self.newestMessages)
     end
 
     -- Save to session log
@@ -126,6 +204,12 @@ function OutputManager:GetMessages()
     return self.messages
 end
 
+--- Get all messages ordered newest-first for UI views
+--- @return table Array of messages
+function OutputManager:GetMessagesNewestFirst()
+    return self.newestMessages
+end
+
 --- Get messages filtered by addon
 --- @param addonName string|nil Addon name or nil for all
 --- @return table Filtered messages
@@ -146,6 +230,7 @@ end
 --- Clear all messages
 function OutputManager:ClearAll()
     wipe(self.messages)
+    wipe(self.newestMessages)
     if MedaDebug.log and MedaDebug.log.session then
         wipe(MedaDebug.log.session.messages)
     end
@@ -296,9 +381,16 @@ function OutputManager:SetMaxMessages(maxMessages)
 
     while #self.messages > self.maxMessages do
         table.remove(self.messages, 1)
+        table.remove(self.newestMessages)
     end
 
     if self.onNewMessage then
         self.onNewMessage(nil)
     end
+end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("OutputManager", {
+        order = 20,
+    })
 end

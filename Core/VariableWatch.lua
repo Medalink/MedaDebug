@@ -4,6 +4,7 @@
 ]]
 
 local _, MedaDebug = ...
+local MedaUI = LibStub("MedaUI-2.0")
 
 local VariableWatch = {}
 MedaDebug.VariableWatch = VariableWatch
@@ -296,4 +297,44 @@ end
 function VariableWatch:SetUpdateInterval(interval)
     self.updateInterval = interval
     self:StartUpdates()
+end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("VariableWatch", {
+        order = 50,
+    })
+end
+
+if MedaDebug.SettingsRegistry then
+    MedaDebug.SettingsRegistry:RegisterModule("watch", {
+        title = "Variable Watch",
+        description = "Polling controls for live variable tracking.",
+        sidebarGroup = "Settings",
+        sidebarOrder = 60,
+        entryType = "nav",
+        pages = {
+            { id = "watch", label = "Variable Watch" },
+        },
+        pageHeights = {
+            watch = 180,
+        },
+        buildPage = function(_, parent)
+            local options = MedaDebug.db and MedaDebug.db.options or {}
+            local yOff = 0
+
+            local header = MedaUI:CreateSectionHeader(parent, "Variable Watch", 470)
+            header:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 38
+
+            local intervalSlider = MedaUI:CreateLabeledSlider(parent, "Refresh Interval", 220, 0.1, 2.0, 0.1)
+            intervalSlider:SetPoint("TOPLEFT", 12, yOff)
+            intervalSlider:SetValue(options.variableWatchInterval or 0.5)
+            intervalSlider.OnValueChanged = function(_, value)
+                options.variableWatchInterval = value
+                VariableWatch:SetUpdateInterval(value)
+            end
+
+            return 180
+        end,
+    })
 end

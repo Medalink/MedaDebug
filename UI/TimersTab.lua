@@ -4,14 +4,68 @@
 ]]
 
 local addonName, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 
 local TimersTab = {}
 MedaDebug.TimersTab = TimersTab
+local DEFAULT_ADDON_COLOR = { 0.6, 0.8, 1 }
 
 TimersTab.frame = nil
 TimersTab.scrollList = nil
 TimersTab.addonFilter = "all"
+TimersTab.lastUpdate = 0
+
+local function SetFontStringText(fontString, text)
+    text = text or ""
+    if fontString._medaText ~= text then
+        fontString:SetText(text)
+        fontString._medaText = text
+    end
+end
+
+local function SetFontStringColor(fontString, color)
+    if not color then
+        return
+    end
+
+    local r = color[1] or 1
+    local g = color[2] or 1
+    local b = color[3] or 1
+    local a = color[4]
+
+    if fontString._medaColorR ~= r
+        or fontString._medaColorG ~= g
+        or fontString._medaColorB ~= b
+        or fontString._medaColorA ~= a then
+        if a ~= nil then
+            fontString:SetTextColor(r, g, b, a)
+        else
+            fontString:SetTextColor(r, g, b)
+        end
+        fontString._medaColorR = r
+        fontString._medaColorG = g
+        fontString._medaColorB = b
+        fontString._medaColorA = a
+    end
+end
+
+local function BuildCountdownText(timer)
+    if not timer then
+        return ""
+    end
+
+    local remaining = timer.timeRemaining or (timer.nextFireAt - GetTime())
+    local countdownText = "next: " .. MedaDebug.TimerTracker:FormatTimeRemaining(remaining)
+    if timer.type == "ticker" then
+        if timer.iterations then
+            countdownText = countdownText .. " #" .. timer.currentIteration .. "/" .. timer.iterations
+        else
+            countdownText = countdownText .. " ∞"
+        end
+    end
+
+    return countdownText
+end
 
 function TimersTab:Initialize(parent)
     self.frame = parent
@@ -92,15 +146,63 @@ function TimersTab:Initialize(parent)
         end
     end
     
-    -- Update countdown display
     self.updateFrame = CreateFrame("Frame")
-    self.updateFrame:SetScript("OnUpdate", function(_, elapsed)
-        self:OnUpdate(elapsed)
+    self.updateFrame:Hide()
+
+    self.frame:HookScript("OnShow", function()
+        self:StartVisibleUpdates()
+    end)
+    self.frame:HookScript("OnHide", function()
+        self:StopVisibleUpdates()
     end)
     
     self:RefreshFilterDropdown()
     self:RefreshData()
     self:UpdateEnabledState()
+end
+
+function TimersTab:StartVisibleUpdates()
+    if not self.updateFrame or not self.frame or not self.frame:IsShown() then
+        return
+    end
+
+    self.updateFrame:SetScript("OnUpdate", function(_, elapsed)
+        self:OnUpdate(elapsed)
+    end)
+    self.updateFrame:Show()
+end
+
+function TimersTab:StopVisibleUpdates()
+    if not self.updateFrame then
+        return
+    end
+
+    self.updateFrame:SetScript("OnUpdate", nil)
+    self.updateFrame:Hide()
+end
+
+function TimersTab:UpdateVisibleCountdowns()
+    if not self.scrollList or not self.scrollList.visibleRows then
+        return
+    end
+
+    local Theme = MedaUI.Theme or MedaUI:GetTheme()
+    for i = 1, #self.scrollList.visibleRows do
+        local row = self.scrollList.visibleRows[i]
+        if row and row.timerData and row.countdownLabel then
+            SetFontStringText(row.countdownLabel, BuildCountdownText(row.timerData))
+            SetFontStringColor(row.countdownLabel, Theme.text)
+
+            if row.warningIcon then
+                if row.timerData.isHighFrequency then
+                    row.warningIcon:Show()
+                    SetFontStringColor(row.warningIcon, { 1, 0.8, 0 })
+                else
+                    row.warningIcon:Hide()
+                end
+            end
+        end
+    end
 end
 
 function TimersTab:UpdateEnabledState()
@@ -117,6 +219,7 @@ function TimersTab:UpdateEnabledState()
         self.countLabel:Show()
         self.scrollList:Show()
         self.enabledCheckbox:Show()
+        self:StartVisibleUpdates()
     else
         self.disabledMsg:Show()
         self.disabledHint:Show()
@@ -125,13 +228,14 @@ function TimersTab:UpdateEnabledState()
         self.countLabel:Hide()
         self.scrollList:Hide()
         self.enabledCheckbox:Hide()
+        self:StopVisibleUpdates()
     end
 end
 
 function TimersTab:RenderRow(row, data, index)
     if not data then return end
     
-    local Theme = MedaUI:GetTheme()
+    local Theme = MedaUI.Theme or MedaUI:GetTheme()
     
     if not row.typeLabel then
         row.typeLabel = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -165,43 +269,28 @@ function TimersTab:RenderRow(row, data, index)
     end
     
     -- Type badge
-    local typeText = "[" .. data.type:upper() .. "]"
-    row.typeLabel:SetText(typeText)
-    row.typeLabel:SetTextColor(unpack(Theme.gold))
+    SetFontStringText(row.typeLabel, "[" .. data.type:upper() .. "]")
+    SetFontStringColor(row.typeLabel, Theme.gold)
     
-    -- Addon name
-    row.addonLabel:SetText(data.sourceAddon or "Unknown")
-    row.addonLabel:SetTextColor(0.6, 0.8, 1)
+    SetFontStringText(row.addonLabel, data.sourceAddon or "Unknown")
+    SetFontStringColor(row.addonLabel, DEFAULT_ADDON_COLOR)
     
-    -- Duration/interval
     if data.type == "ticker" then
-        row.durationLabel:SetText("every " .. string.format("%.2f", data.duration) .. "s")
+        SetFontStringText(row.durationLabel, "every " .. string.format("%.2f", data.duration) .. "s")
     else
-        row.durationLabel:SetText("fires: " .. string.format("%.1f", data.duration) .. "s")
+        SetFontStringText(row.durationLabel, "fires: " .. string.format("%.1f", data.duration) .. "s")
     end
-    row.durationLabel:SetTextColor(unpack(Theme.textDim))
+    SetFontStringColor(row.durationLabel, Theme.textDim)
     
-    -- Source
-    row.sourceLabel:SetText("└─ " .. (data.sourceLine or "unknown"))
-    row.sourceLabel:SetTextColor(unpack(Theme.textDim))
+    SetFontStringText(row.sourceLabel, "└─ " .. (data.sourceLine or "unknown"))
+    SetFontStringColor(row.sourceLabel, Theme.textDim)
     
-    -- Countdown
-    local remaining = data.timeRemaining or (data.nextFireAt - GetTime())
-    local countdownText = "next: " .. MedaDebug.TimerTracker:FormatTimeRemaining(remaining)
-    if data.type == "ticker" then
-        if data.iterations then
-            countdownText = countdownText .. " #" .. data.currentIteration .. "/" .. data.iterations
-        else
-            countdownText = countdownText .. " ∞"
-        end
-    end
-    row.countdownLabel:SetText(countdownText)
-    row.countdownLabel:SetTextColor(unpack(Theme.text))
+    SetFontStringText(row.countdownLabel, BuildCountdownText(data))
+    SetFontStringColor(row.countdownLabel, Theme.text)
     
-    -- High frequency warning
     if data.isHighFrequency then
         row.warningIcon:Show()
-        row.warningIcon:SetTextColor(1, 0.8, 0)
+        SetFontStringColor(row.warningIcon, { 1, 0.8, 0 })
     else
         row.warningIcon:Hide()
     end
@@ -240,14 +329,12 @@ function TimersTab:RefreshFilterDropdown()
 end
 
 function TimersTab:OnUpdate(elapsed)
-    -- Refresh countdowns periodically
-    if not self.lastUpdate then self.lastUpdate = 0 end
     self.lastUpdate = self.lastUpdate + elapsed
     
     if self.lastUpdate > 0.1 then
         self.lastUpdate = 0
         if self.frame and self.frame:IsShown() then
-            self.scrollList:Refresh()
+            self:UpdateVisibleCountdowns()
         end
     end
 end
@@ -257,10 +344,26 @@ function TimersTab:OnShow()
     if MedaDebug.TimerTracker and MedaDebug.TimerTracker:IsEnabled() then
         self:RefreshFilterDropdown()
         self:RefreshData()
+        self:StartVisibleUpdates()
     end
 end
 
 function TimersTab:Clear()
     -- Can't really clear timers, just refresh
     self:RefreshData()
+end
+
+if MedaDebug.WorkspaceRegistry then
+    MedaDebug.WorkspaceRegistry:RegisterPage("timers", {
+        label = "Timers",
+        title = "Timer Tracker",
+        subtitle = "Observe scheduled timers and callback churn.",
+        summary = "This page is most useful when timer tracking is enabled for a short, focused capture.",
+        moduleKey = "TimersTab",
+        height = 1000,
+        groupId = "runtime",
+        groupLabel = "Runtime",
+        groupOrder = 30,
+        pageOrder = 20,
+    })
 end

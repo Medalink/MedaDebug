@@ -4,7 +4,7 @@
 ]]
 
 local _, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 
 local WatchTab = {}
 MedaDebug.WatchTab = WatchTab
@@ -186,4 +186,19 @@ function WatchTab:Clear()
         MedaDebug.VariableWatch:ClearAll()
     end
     self:RefreshData()
+end
+
+if MedaDebug.WorkspaceRegistry then
+    MedaDebug.WorkspaceRegistry:RegisterPage("watch", {
+        label = "Watch",
+        title = "Variable Watch",
+        subtitle = "Track changing values across frames without spamming chat.",
+        summary = "Use `/mdebug var <path>` to add watches from slash commands.",
+        moduleKey = "WatchTab",
+        height = 1000,
+        groupId = "tools",
+        groupLabel = "Tools",
+        groupOrder = 20,
+        pageOrder = 30,
+    })
 end

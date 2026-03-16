@@ -4,7 +4,7 @@
 ]]
 
 local _, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 local Pixel = MedaUI.Pixel
 
 local InspectorTab = {}
@@ -818,4 +818,19 @@ function InspectorTab:Clear()
     self.frameLabel:SetTextColor(unpack(Theme.text))
     self.frameLabel:SetText("No frame selected")
     self.treeView:SetData({})
+end
+
+if MedaDebug.WorkspaceRegistry then
+    MedaDebug.WorkspaceRegistry:RegisterPage("inspector", {
+        label = "Inspector",
+        title = "Frame Inspector",
+        subtitle = "Inspect frames, regions, and live UI structures.",
+        summary = "Switch into inspect mode from here or from `/mdebug inspect`.",
+        moduleKey = "InspectorTab",
+        height = 1400,
+        groupId = "tools",
+        groupLabel = "Tools",
+        groupOrder = 20,
+        pageOrder = 20,
+    })
 end

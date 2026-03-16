@@ -140,3 +140,9 @@ function ProfilerLite:Clear()
     wipe(self.entries)
     self:ScheduleNotify()
 end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("ProfilerLite", {
+        order = 30,
+    })
+end

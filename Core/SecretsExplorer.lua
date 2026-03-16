@@ -926,3 +926,9 @@ function SecretsExplorer:FormatForCopy(frameInfo)
 
     return table.concat(lines, "\n")
 end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("SecretsExplorer", {
+        order = 70,
+    })
+end

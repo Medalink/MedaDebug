@@ -4,7 +4,7 @@
 ]]
 
 local addonName, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 local Pixel = MedaUI.Pixel
 
 local SecretsTab = {}
@@ -591,9 +591,24 @@ function SecretsTab:OnFilterChanged(filter)
 end
 
 function SecretsTab:OnSearch(text)
-    -- Global search from DebugFrame
+    -- Global search from the workspace host
     if self.searchInput then
         self.searchInput:SetText(text)
         self:DoSearch()
     end
+end
+
+if MedaDebug.WorkspaceRegistry then
+    MedaDebug.WorkspaceRegistry:RegisterPage("secrets", {
+        label = "Secrets",
+        title = "Secrets Explorer",
+        subtitle = "Probe hidden or protected values without poisoning the session.",
+        summary = "Use this page to map secret access seams and verify safe inspection patterns.",
+        moduleKey = "SecretsTab",
+        height = 1800,
+        groupId = "runtime",
+        groupLabel = "Runtime",
+        groupOrder = 30,
+        pageOrder = 40,
+    })
 end

@@ -4,7 +4,7 @@
 ]]
 
 local _, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 
 local ConsoleTab = {}
 MedaDebug.ConsoleTab = ConsoleTab
@@ -256,4 +256,19 @@ function ConsoleTab:OnShow()
             self.inputBox:SetFocus()
         end
     end)
+end
+
+if MedaDebug.WorkspaceRegistry then
+    MedaDebug.WorkspaceRegistry:RegisterPage("console", {
+        label = "Console",
+        title = "Console",
+        subtitle = "Run Lua snippets and inspect the immediate output stream.",
+        summary = "Execution state stays local to the current session. Use with care on live characters.",
+        moduleKey = "ConsoleTab",
+        height = 1000,
+        groupId = "tools",
+        groupLabel = "Tools",
+        groupOrder = 20,
+        pageOrder = 10,
+    })
 end

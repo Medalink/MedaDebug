@@ -4,7 +4,7 @@
 ]]
 
 local addonName, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 
 local EventsTab = {}
 MedaDebug.EventsTab = EventsTab
@@ -14,21 +14,56 @@ EventsTab.scrollList = nil
 EventsTab.categoryFilter = "all"
 EventsTab.isPaused = false
 EventsTab.searchText = ""
+EventsTab.searchLower = nil
 EventsTab.viewData = nil
 
-local function SafeContains(text, search)
-    if type(text) ~= "string" or search == "" then
-        return false
+local function SetFontStringText(fontString, text)
+    text = text or ""
+    if fontString._medaText ~= text then
+        fontString:SetText(text)
+        fontString._medaText = text
+    end
+end
+
+local function SetFontStringColor(fontString, color)
+    if not color then
+        return
     end
 
-    local ok, lowerText = pcall(function()
-        return text:lower()
-    end)
-    if not ok then
-        return false
+    local r = color[1] or 1
+    local g = color[2] or 1
+    local b = color[3] or 1
+    local a = color[4]
+
+    if fontString._medaColorR ~= r
+        or fontString._medaColorG ~= g
+        or fontString._medaColorB ~= b
+        or fontString._medaColorA ~= a then
+        if a ~= nil then
+            fontString:SetTextColor(r, g, b, a)
+        else
+            fontString:SetTextColor(r, g, b)
+        end
+        fontString._medaColorR = r
+        fontString._medaColorG = g
+        fontString._medaColorB = b
+        fontString._medaColorA = a
+    end
+end
+
+function EventsTab:FindVisibleRow(entry)
+    if not self.scrollList or not self.scrollList.visibleRows then
+        return nil
     end
 
-    return lowerText:find(search, 1, true) ~= nil
+    for i = 1, #self.scrollList.visibleRows do
+        local row = self.scrollList.visibleRows[i]
+        if row and row.boundData == entry then
+            return row
+        end
+    end
+
+    return nil
 end
 
 function EventsTab:Initialize(parent)
@@ -118,7 +153,12 @@ function EventsTab:Initialize(parent)
                     self:RefreshData()
                 elseif isUpdate then
                     if self:MatchesFilters(entry) then
-                        self.scrollList:Refresh()
+                        local row = self:FindVisibleRow(entry)
+                        if row then
+                            self:RenderRow(row, entry, row._dataIndex or 0)
+                        else
+                            self.scrollList:Refresh()
+                        end
                     else
                         self:RefreshData()
                     end
@@ -145,11 +185,12 @@ function EventsTab:MatchesFilters(entry)
         return false
     end
 
-    if self:HasActiveSearch() then
-        local search = self.searchText:lower()
-        if not SafeContains(entry.event, search) and
-           not SafeContains(MedaDebug.EventMonitor:FormatArgs(entry.args), search) and
-           not SafeContains(entry.category, search) then
+    local search = self.searchLower
+    if search then
+        local matchesEvent = entry.searchEvent and entry.searchEvent:find(search, 1, true)
+        local matchesArgs = entry.searchArgs and entry.searchArgs:find(search, 1, true)
+        local matchesCategory = entry.searchCategory and entry.searchCategory:find(search, 1, true)
+        if not matchesEvent and not matchesArgs and not matchesCategory then
             return false
         end
     end
@@ -187,7 +228,8 @@ end
 function EventsTab:RenderRow(row, data, index)
     if not data then return end
     
-    local Theme = MedaUI:GetTheme()
+    local Theme = MedaUI.Theme or MedaUI:GetTheme()
+    row.boundData = data
     
     if not row.timestamp then
         row.timestamp = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -215,21 +257,20 @@ function EventsTab:RenderRow(row, data, index)
         row.count:SetPoint("RIGHT", -4, 0)
     end
     
-    row.timestamp:SetText(data.datetime or "")
-    row.timestamp:SetTextColor(unpack(Theme.textDim))
+    SetFontStringText(row.timestamp, data.datetime or "")
+    SetFontStringColor(row.timestamp, Theme.textDim)
     
-    row.eventName:SetText(data.event or "")
-    row.eventName:SetTextColor(unpack(Theme.gold))
+    SetFontStringText(row.eventName, data.event or "")
+    SetFontStringColor(row.eventName, Theme.gold)
     
-    local argsStr = MedaDebug.EventMonitor:FormatArgs(data.args)
-    row.args:SetText(argsStr)
-    row.args:SetTextColor(unpack(Theme.text))
+    SetFontStringText(row.args, data.displayArgs or "(no args)")
+    SetFontStringColor(row.args, Theme.text)
     
     if data.throttleCount and data.throttleCount > 1 then
-        row.count:SetText("x" .. data.throttleCount)
-        row.count:SetTextColor(unpack(Theme.levelWarn))
+        SetFontStringText(row.count, "x" .. data.throttleCount)
+        SetFontStringColor(row.count, Theme.levelWarn)
     else
-        row.count:SetText("")
+        SetFontStringText(row.count, "")
     end
 end
 
@@ -289,5 +330,21 @@ end
 
 function EventsTab:OnSearch(text)
     self.searchText = text or ""
+    self.searchLower = self.searchText ~= "" and self.searchText:lower() or nil
     self:RefreshData()
+end
+
+if MedaDebug.WorkspaceRegistry then
+    MedaDebug.WorkspaceRegistry:RegisterPage("events", {
+        label = "Events",
+        title = "Event Monitor",
+        subtitle = "Live event traffic with category filtering and throttling.",
+        summary = "Enable only when needed; this page is intended for targeted runtime inspection.",
+        moduleKey = "EventsTab",
+        height = 1200,
+        groupId = "streams",
+        groupLabel = "Streams",
+        groupOrder = 10,
+        pageOrder = 30,
+    })
 end

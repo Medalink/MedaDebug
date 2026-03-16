@@ -4,7 +4,7 @@
 ]]
 
 local _, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 
 local SystemTab = {}
 MedaDebug.SystemTab = SystemTab
@@ -291,4 +291,19 @@ end
 
 function SystemTab:Clear()
     -- Nothing to clear really
+end
+
+if MedaDebug.WorkspaceRegistry then
+    MedaDebug.WorkspaceRegistry:RegisterPage("system", {
+        label = "System",
+        title = "System Monitor",
+        subtitle = "FPS, latency, memory, and runtime health signals.",
+        summary = "Use this page to confirm whether issues are addon-local or broader client pressure.",
+        moduleKey = "SystemTab",
+        height = 1000,
+        groupId = "runtime",
+        groupLabel = "Runtime",
+        groupOrder = 30,
+        pageOrder = 30,
+    })
 end

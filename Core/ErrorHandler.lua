@@ -499,6 +499,12 @@ function ErrorHandler:FormatForCopy(entry)
     lines[#lines + 1] = "Full Stack:"
     lines[#lines + 1] = raw.stack or "(no stack trace)"
     lines[#lines + 1] = "==="
-    
+
     return table.concat(lines, "\n")
+end
+
+if MedaDebug.RuntimeRegistry then
+    MedaDebug.RuntimeRegistry:RegisterModule("ErrorHandler", {
+        order = 10,
+    })
 end

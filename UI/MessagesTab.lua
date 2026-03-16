@@ -4,42 +4,66 @@
 ]]
 
 local _, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 
 local MessagesTab = {}
 MedaDebug.MessagesTab = MessagesTab
+local DEFAULT_ADDON_COLOR = { 0.6, 0.8, 1 }
 
 MessagesTab.frame = nil
 MessagesTab.scrollList = nil
 MessagesTab.currentFilter = "all"
 MessagesTab.searchText = ""
+MessagesTab.searchLower = nil
 MessagesTab.viewData = nil
 
-local function IsReloadSeparator(message)
-    if type(message) ~= "string" then
-        return false
+local function SetFontStringText(fontString, text)
+    text = text or ""
+    if fontString._medaText ~= text then
+        fontString:SetText(text)
+        fontString._medaText = text
     end
-
-    local ok, isSeparator = pcall(function()
-        return message:match("^%-%-%-") ~= nil
-    end)
-
-    return ok and isSeparator or false
 end
 
-local function SafeContains(text, search)
-    if type(text) ~= "string" or search == "" then
-        return false
+local function SetFontStringColor(fontString, color)
+    if not color then
+        return
     end
 
-    local ok, lowerText = pcall(function()
-        return text:lower()
-    end)
-    if not ok then
-        return false
+    local r = color[1] or 1
+    local g = color[2] or 1
+    local b = color[3] or 1
+    local a = color[4]
+
+    if fontString._medaColorR ~= r
+        or fontString._medaColorG ~= g
+        or fontString._medaColorB ~= b
+        or fontString._medaColorA ~= a then
+        if a ~= nil then
+            fontString:SetTextColor(r, g, b, a)
+        else
+            fontString:SetTextColor(r, g, b)
+        end
+        fontString._medaColorR = r
+        fontString._medaColorG = g
+        fontString._medaColorB = b
+        fontString._medaColorA = a
+    end
+end
+
+function MessagesTab:FindVisibleRow(entry)
+    if not self.scrollList or not self.scrollList.visibleRows then
+        return nil
     end
 
-    return lowerText:find(search, 1, true) ~= nil
+    for i = 1, #self.scrollList.visibleRows do
+        local row = self.scrollList.visibleRows[i]
+        if row and row.boundData == entry then
+            return row
+        end
+    end
+
+    return nil
 end
 
 function MessagesTab:Initialize(parent)
@@ -72,9 +96,11 @@ function MessagesTab:MatchesFilters(entry)
         return false
     end
 
-    if self:HasActiveSearch() then
-        local search = self.searchText:lower()
-        if not SafeContains(entry.message, search) and not SafeContains(entry.addon, search) then
+    local search = self.searchLower
+    if search then
+        local matchesMessage = entry.searchMessage and entry.searchMessage:find(search, 1, true)
+        local matchesAddon = entry.searchAddon and entry.searchAddon:find(search, 1, true)
+        if not matchesMessage and not matchesAddon then
             return false
         end
     end
@@ -85,7 +111,8 @@ end
 function MessagesTab:RenderRow(row, data, index)
     if not data then return end
 
-    local Theme = MedaUI:GetTheme()
+    local Theme = MedaUI.Theme or MedaUI:GetTheme()
+    row.boundData = data
 
     -- Create elements if needed
     if not row.timestamp then
@@ -117,41 +144,26 @@ function MessagesTab:RenderRow(row, data, index)
         row.message:SetWordWrap(false)
     end
 
-    -- Check for reload separator
-    if IsReloadSeparator(data.message) then
-        row.timestamp:SetText("")
-        row.addon:SetText("")
-        row.message:SetText(data.message)
-        row.message:SetTextColor(unpack(Theme.gold))
-        row.count:SetText("")
+    if data.isReloadSeparator then
+        SetFontStringText(row.timestamp, "")
+        SetFontStringText(row.addon, "")
+        SetFontStringText(row.message, data.displayMessage or "")
+        SetFontStringColor(row.message, Theme.gold)
+        SetFontStringText(row.count, "")
         row:SetBackdropColor(unpack(Theme.backgroundLight))
         return
     end
 
-    -- Set values
-    row.timestamp:SetText(data.datetime or "")
-    row.timestamp:SetTextColor(unpack(Theme.textDim))
+    SetFontStringText(row.timestamp, data.datetime or "")
+    SetFontStringColor(row.timestamp, Theme.textDim)
 
-    row.addon:SetText("[" .. (data.addon or "?") .. "]")
-    if data.addonColor then
-        row.addon:SetTextColor(unpack(data.addonColor))
-    else
-        row.addon:SetTextColor(0.6, 0.8, 1)
-    end
+    SetFontStringText(row.addon, data.addonLabel or "[?]")
+    SetFontStringColor(row.addon, data.addonColor or DEFAULT_ADDON_COLOR)
 
-    row.message:SetText(data.message or "")
-    if data.levelColor then
-        row.message:SetTextColor(unpack(data.levelColor))
-    else
-        row.message:SetTextColor(unpack(Theme.text))
-    end
+    SetFontStringText(row.message, data.displayMessage or "")
+    SetFontStringColor(row.message, data.levelColor or Theme.text)
 
-    -- Show count if 3 or more duplicates
-    if data.count and data.count >= 3 then
-        row.count:SetText("|cffFFAA00x" .. data.count .. "|r")
-    else
-        row.count:SetText("")
-    end
+    SetFontStringText(row.count, data.countText or "")
 end
 
 function MessagesTab:RefreshData()
@@ -159,31 +171,21 @@ function MessagesTab:RefreshData()
     local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("Messages.RefreshData", "ui", "MessagesTab")
 
     local messages
-    if self.currentFilter == "all" then
-        messages = MedaDebug.OutputManager:GetMessages()
+    if self:CanIncrementallyUpdate() then
+        messages = MedaDebug.OutputManager:GetMessagesNewestFirst()
     else
-        messages = MedaDebug.OutputManager:GetFilteredMessages(self.currentFilter)
-    end
-
-    -- Apply search filter
-    if self.searchText and self.searchText ~= "" then
+        local source = MedaDebug.OutputManager:GetMessages()
         local filtered = {}
-        local search = self.searchText:lower()
-        for _, msg in ipairs(messages) do
-            if SafeContains(msg.message, search) or SafeContains(msg.addon, search) then
-                filtered[#filtered + 1] = msg
+        for i = #source, 1, -1 do
+            local entry = source[i]
+            if self:MatchesFilters(entry) then
+                filtered[#filtered + 1] = entry
             end
         end
         messages = filtered
     end
 
-    -- Reverse order so newest messages are at top
-    local reversed = {}
-    for i = #messages, 1, -1 do
-        reversed[#reversed + 1] = messages[i]
-    end
-
-    self.viewData = reversed
+    self.viewData = messages
     self.scrollList:SetData(self.viewData)
 
     -- Auto-scroll to top (newest) if enabled
@@ -205,7 +207,12 @@ function MessagesTab:OnNewMessage(entry, isUpdate)
 
     if isUpdate then
         if self:MatchesFilters(entry) then
-            self.scrollList:Refresh()
+            local row = self:FindVisibleRow(entry)
+            if row then
+                self:RenderRow(row, entry, row._dataIndex or 0)
+            else
+                self.scrollList:Refresh()
+            end
         else
             self:RefreshData()
         end
@@ -217,11 +224,13 @@ function MessagesTab:OnNewMessage(entry, isUpdate)
         return
     end
 
-    table.insert(self.viewData, 1, entry)
-    while #self.viewData > MedaDebug.OutputManager:GetMessageCount() do
-        table.remove(self.viewData)
+    local newestMessages = MedaDebug.OutputManager:GetMessagesNewestFirst()
+    if self.viewData ~= newestMessages then
+        self.viewData = newestMessages
+        self.scrollList:SetData(self.viewData)
+    else
+        self.scrollList:Refresh()
     end
-    self.scrollList:SetData(self.viewData)
 
     if MedaDebug.db and MedaDebug.db.options.autoScroll then
         self.scrollList:ScrollToTop()
@@ -235,6 +244,7 @@ end
 
 function MessagesTab:OnSearch(text)
     self.searchText = text or ""
+    self.searchLower = self.searchText ~= "" and self.searchText:lower() or nil
     self:RefreshData()
 end
 
@@ -251,4 +261,19 @@ end
 
 function MessagesTab:OnResize(width, height)
     -- ScrollList handles resize internally
+end
+
+if MedaDebug.WorkspaceRegistry then
+    MedaDebug.WorkspaceRegistry:RegisterPage("messages", {
+        label = "Messages",
+        title = "Message Stream",
+        subtitle = "Session output from MedaDebug-enabled addons.",
+        summary = "Filter by addon, search the active stream, or copy the current visible output.",
+        moduleKey = "MessagesTab",
+        height = 1200,
+        groupId = "streams",
+        groupLabel = "Streams",
+        groupOrder = 10,
+        pageOrder = 10,
+    })
 end

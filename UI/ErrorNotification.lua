@@ -4,7 +4,7 @@
 ]]
 
 local _, MedaDebug = ...
-local MedaUI = LibStub("MedaUI-1.0")
+local MedaUI = LibStub("MedaUI-2.0")
 
 local ErrorNotification = {}
 MedaDebug.ErrorNotification = ErrorNotification
@@ -89,11 +89,7 @@ function ErrorNotification:Initialize()
     -- Click handlers
     frame:SetScript("OnClick", function(buttonFrame, button)
         if button == "LeftButton" then
-            -- Show debug window and switch to errors tab
-            if MedaDebug.DebugFrame then
-                MedaDebug.DebugFrame:Show()
-                MedaDebug.DebugFrame:SetActiveTab("errors")
-            end
+            MedaDebug:ShowMainPage("errors")
         elseif button == "RightButton" then
             -- Clear all errors
             if MedaDebug.ErrorHandler then
@@ -273,4 +269,68 @@ function ErrorNotification:SetOpacity(opacity)
     if self.frame then
         self.frame:SetAlpha(opacity)
     end
+end
+
+if MedaDebug.SettingsRegistry then
+    MedaDebug.SettingsRegistry:RegisterModule("notifications", {
+        title = "Notifications",
+        description = "Error surfacing behavior for MedaDebug notifications and Blizzard error suppression.",
+        sidebarGroup = "Settings",
+        sidebarOrder = 20,
+        entryType = "nav",
+        pages = {
+            { id = "notifications", label = "Notifications" },
+        },
+        pageHeights = {
+            notifications = 320,
+        },
+        buildPage = function(_, parent)
+            local options = MedaDebug.db and MedaDebug.db.options or {}
+            local settings = options.errorNotification or {}
+            local yOff = 0
+
+            local header = MedaUI:CreateSectionHeader(parent, "Error Notifications", 470)
+            header:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 38
+
+            local enabledCheckbox = MedaUI:CreateCheckbox(parent, "Enable Error Notifications")
+            enabledCheckbox:SetPoint("TOPLEFT", 12, yOff)
+            enabledCheckbox:SetChecked(settings.enabled)
+            enabledCheckbox.OnValueChanged = function(_, checked)
+                settings.enabled = checked
+                ErrorNotification:ApplySettings()
+            end
+            yOff = yOff - 28
+
+            local tameCheckbox = MedaUI:CreateCheckbox(parent, "Hide Blizzard error popup (show slim error bar instead)")
+            tameCheckbox:SetPoint("TOPLEFT", 12, yOff)
+            tameCheckbox:SetChecked(options.tameBlizzardErrors)
+            tameCheckbox.OnValueChanged = function(_, checked)
+                options.tameBlizzardErrors = checked
+                if checked then
+                    MedaDebug:TameBlizzardErrors()
+                end
+            end
+            yOff = yOff - 42
+
+            local iconSizeSlider = MedaUI:CreateLabeledSlider(parent, "Icon Size", 220, 32, 128, 8)
+            iconSizeSlider:SetPoint("TOPLEFT", 12, yOff)
+            iconSizeSlider:SetValue(settings.size or 64)
+            iconSizeSlider.OnValueChanged = function(_, value)
+                settings.size = value
+                ErrorNotification:ApplySettings()
+            end
+            yOff = yOff - 62
+
+            local opacitySlider = MedaUI:CreateLabeledSlider(parent, "Opacity", 220, 0.3, 1.0, 0.1)
+            opacitySlider:SetPoint("TOPLEFT", 12, yOff)
+            opacitySlider:SetValue(settings.opacity or 1.0)
+            opacitySlider.OnValueChanged = function(_, value)
+                settings.opacity = value
+                ErrorNotification:SetOpacity(value)
+            end
+
+            return 320
+        end,
+    })
 end

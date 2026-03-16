@@ -181,6 +181,26 @@ end
 
 function MainHost:UpdateFreshness()
     local sessionStart = MedaDebug.log and MedaDebug.log.session and MedaDebug.log.session.startTime or 0
+    local messageCount = MedaDebug.OutputManager and MedaDebug.OutputManager:GetMessageCount() or 0
+    local visibleErrors = MedaDebug.ErrorHandler and MedaDebug.ErrorHandler:GetVisibleErrorCount() or 0
+    local suppressedErrors = MedaDebug.ErrorHandler and MedaDebug.ErrorHandler:GetSuppressedErrorCount() or 0
+    local activeMonitors = {}
+
+    if MedaDebug.EventMonitor and MedaDebug.EventMonitor:IsEnabled() then
+        activeMonitors[#activeMonitors + 1] = "events"
+    end
+    if MedaDebug.TimerTracker and MedaDebug.TimerTracker:IsEnabled() then
+        activeMonitors[#activeMonitors + 1] = "timers"
+    end
+    if MedaDebug.SystemMonitor and MedaDebug.SystemMonitor:IsEnabled() then
+        activeMonitors[#activeMonitors + 1] = "system"
+    end
+
+    local monitorText = #activeMonitors > 0 and table.concat(activeMonitors, ", ") or "idle"
+    if self.workspace and self.workspace.navFreshness and self.workspace.navFreshness.label then
+        self.workspace.navFreshness.label:SetText("Debug State")
+    end
+
     self.workspace:SetFreshnessSources({
         {
             id = "session",
@@ -189,10 +209,28 @@ function MainHost:UpdateFreshness()
             color = MedaUI.Theme and MedaUI.Theme.gold or { 0.9, 0.7, 0.15, 1 },
         },
         {
-            id = "runtime",
-            label = "Runtime",
-            lastFetched = time(),
+            id = "messages",
+            label = "Messages",
+            detailText = tostring(messageCount),
             color = MedaUI.Theme and MedaUI.Theme.textDim or { 0.65, 0.65, 0.65, 1 },
+        },
+        {
+            id = "errors",
+            label = "Errors",
+            detailText = suppressedErrors > 0
+                and string.format("%d visible, %d muted", visibleErrors, suppressedErrors)
+                or string.format("%d visible", visibleErrors),
+            color = visibleErrors > 0
+                and (MedaUI.Theme and MedaUI.Theme.error or { 1, 0.3, 0.3, 1 })
+                or (MedaUI.Theme and MedaUI.Theme.textDim or { 0.65, 0.65, 0.65, 1 }),
+        },
+        {
+            id = "monitors",
+            label = "Monitors",
+            detailText = monitorText,
+            color = #activeMonitors > 0
+                and (MedaUI.Theme and MedaUI.Theme.warning or { 1, 0.7, 0.2, 1 })
+                or (MedaUI.Theme and MedaUI.Theme.textDim or { 0.65, 0.65, 0.65, 1 }),
         },
     })
 end
@@ -286,6 +324,7 @@ function MainHost:ShowPage(pageId)
     if self.workspace.ScheduleLayoutRefresh and self:IsShown() then
         self.workspace:ScheduleLayoutRefresh(true)
     end
+    self:UpdateFreshness()
     self:RefreshFilterDropdown()
     self:UpdateErrorBadge()
 
@@ -475,6 +514,8 @@ function MainHost:UpdateErrorBadge()
 end
 
 function MainHost:HandleNewMessage(entry, isUpdate)
+    self:UpdateFreshness()
+
     if entry == nil then
         self:RefreshFilterDropdown()
     elseif entry.addon and not self.knownMessageAddons[entry.addon] then
@@ -492,6 +533,7 @@ function MainHost:HandleNewMessage(entry, isUpdate)
 end
 
 function MainHost:HandleErrorChanged(kind, entry)
+    self:UpdateFreshness()
     self:UpdateErrorBadge()
 
     local module = GetPageModule("errors")

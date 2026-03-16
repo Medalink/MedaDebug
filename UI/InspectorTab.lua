@@ -828,6 +828,8 @@ if MedaDebug.WorkspaceRegistry then
         summary = "Switch into inspect mode from here or from `/mdebug inspect`.",
         moduleKey = "InspectorTab",
         height = 1400,
+        useGlobalClear = true,
+        useGlobalCopy = true,
         groupId = "tools",
         groupLabel = "Tools",
         groupOrder = 20,

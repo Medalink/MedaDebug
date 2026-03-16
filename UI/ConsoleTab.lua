@@ -266,6 +266,7 @@ if MedaDebug.WorkspaceRegistry then
         summary = "Execution state stays local to the current session. Use with care on live characters.",
         moduleKey = "ConsoleTab",
         height = 1000,
+        useGlobalClear = true,
         groupId = "tools",
         groupLabel = "Tools",
         groupOrder = 20,

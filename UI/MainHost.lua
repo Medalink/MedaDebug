@@ -17,8 +17,9 @@ MainHost.activeTab = "messages"
 MainHost.currentFilter = "all"
 MainHost.searchText = ""
 MainHost.knownMessageAddons = {}
+MainHost.pageToolbars = nil
 
-local TOOLBAR_WIDTH = 520
+local TOOLBAR_WIDTH = 680
 
 local function GetFrameState()
     return MedaDebug.db and MedaDebug.db.frameState
@@ -44,6 +45,127 @@ end
 
 function MainHost:GetActiveModule()
     return GetPageModule(self.activeTab)
+end
+
+function MainHost:GetPageDefinition(pageId)
+    if not WorkspaceRegistry then
+        return nil
+    end
+
+    return WorkspaceRegistry:GetPage(pageId)
+end
+
+function MainHost:GetToolbarState(pageId)
+    local page = self:GetPageDefinition(pageId)
+    local module = GetPageModule(pageId)
+
+    return {
+        page = page,
+        module = module,
+        showAddonFilter = page and page.useAddonFilter == true or false,
+        showSearch = page and page.useGlobalSearch == true or false,
+        showClear = page and page.useGlobalClear == true or false,
+        showCopy = page and page.useGlobalCopy == true or false,
+    }
+end
+
+function MainHost:EnsurePageToolbar(pageId)
+    local module = GetPageModule(pageId)
+    if not module or not module.BuildToolbar or not self.pageToolbarHost then
+        return nil, module
+    end
+
+    self.pageToolbars = self.pageToolbars or {}
+
+    local toolbarFrame = self.pageToolbars[pageId]
+    if not toolbarFrame then
+        toolbarFrame = CreateFrame("Frame", nil, self.pageToolbarHost)
+        toolbarFrame:SetAllPoints()
+        toolbarFrame:Hide()
+        self.pageToolbars[pageId] = toolbarFrame
+        module:BuildToolbar(toolbarFrame, self)
+    end
+
+    return toolbarFrame, module
+end
+
+function MainHost:RefreshPageToolbar(pageId)
+    if self.pageToolbars then
+        for _, frame in pairs(self.pageToolbars) do
+            frame:Hide()
+        end
+    end
+
+    local toolbarFrame, module = self:EnsurePageToolbar(pageId)
+    if toolbarFrame then
+        toolbarFrame:Show()
+    end
+
+    if module and module.RefreshToolbar then
+        module:RefreshToolbar(toolbarFrame, self)
+    end
+end
+
+function MainHost:LayoutToolbar(pageId)
+    if not self.workspace then
+        return
+    end
+
+    local toolbar = self.workspace:GetToolbar()
+    local state = self:GetToolbarState(pageId)
+    local previous
+    local gap = 6
+
+    local function PlaceRight(control)
+        control:ClearAllPoints()
+        if previous then
+            control:SetPoint("RIGHT", previous, "LEFT", -gap, 0)
+        else
+            control:SetPoint("RIGHT", toolbar, "RIGHT", 0, 0)
+        end
+        previous = control
+    end
+
+    self.actionsBtn:Show()
+    PlaceRight(self.actionsBtn)
+
+    if state.showSearch then
+        self.searchBox:Show()
+        PlaceRight(self.searchBox)
+    else
+        self.searchBox:Hide()
+    end
+
+    if state.showCopy then
+        self.copyBtn:Show()
+        PlaceRight(self.copyBtn)
+    else
+        self.copyBtn:Hide()
+    end
+
+    if state.showClear then
+        self.clearBtn:Show()
+        PlaceRight(self.clearBtn)
+    else
+        self.clearBtn:Hide()
+    end
+
+    if state.showAddonFilter then
+        self.filterDropdown:Show()
+        PlaceRight(self.filterDropdown)
+    else
+        self.filterDropdown:Hide()
+    end
+
+    self.pageToolbarHost:ClearAllPoints()
+    self.pageToolbarHost:SetPoint("TOPLEFT", toolbar, "TOPLEFT", 0, 0)
+    if previous then
+        self.pageToolbarHost:SetPoint("BOTTOMRIGHT", previous, "LEFT", -12, 0)
+    else
+        self.pageToolbarHost:SetPoint("BOTTOMRIGHT", toolbar, "BOTTOMRIGHT", 0, 0)
+    end
+
+    self:RefreshPageToolbar(pageId)
 end
 
 function MainHost:BuildNavigation()
@@ -157,6 +279,7 @@ function MainHost:ShowPage(pageId)
     end
 
     self.activeTab = pageId
+    self:LayoutToolbar(pageId)
     self.workspace:SetActivePage(pageId)
     self:ApplyPageChrome(pageId)
     self.workspace:RefreshActivePage()
@@ -175,10 +298,11 @@ end
 function MainHost:InitializeToolbar()
     local toolbar = self.workspace:GetToolbar()
 
+    self.pageToolbarHost = CreateFrame("Frame", nil, toolbar)
+
     self.filterDropdown = MedaUI:CreateDropdown(toolbar, 108, {
         { value = "all", label = "All Addons" },
     })
-    self.filterDropdown:SetPoint("LEFT", 0, 0)
     self.filterDropdown.OnValueChanged = function(_, value)
         self.currentFilter = value
         if MedaDebug.db then
@@ -191,34 +315,16 @@ function MainHost:InitializeToolbar()
     end
 
     self.clearBtn = MedaUI:CreateButton(toolbar, "Clear", 48, 22)
-    self.clearBtn:SetPoint("LEFT", self.filterDropdown, "RIGHT", 6, 0)
     self.clearBtn:SetScript("OnClick", function()
         self:ClearCurrentPage()
     end)
 
     self.copyBtn = MedaUI:CreateButton(toolbar, "Copy", 44, 22)
-    self.copyBtn:SetPoint("LEFT", self.clearBtn, "RIGHT", 6, 0)
     self.copyBtn:SetScript("OnClick", function()
         self:CopyCurrentPage()
     end)
 
-    self.reloadBtn = MedaUI:CreateButton(toolbar, "/reload", 52, 22)
-    self.reloadBtn:SetPoint("LEFT", self.copyBtn, "RIGHT", 6, 0)
-    self.reloadBtn:SetScript("OnClick", function()
-        ReloadUI()
-    end)
-
-    self.gcBtn = MedaUI:CreateButton(toolbar, "GC", 32, 22)
-    self.gcBtn:SetPoint("LEFT", self.reloadBtn, "RIGHT", 6, 0)
-    self.gcBtn:SetScript("OnClick", function()
-        local before = collectgarbage("count")
-        collectgarbage("collect")
-        local after = collectgarbage("count")
-        MedaDebug:LogInternal("MedaDebug", string.format("Garbage collected: %.1f KB freed", before - after), "INFO")
-    end)
-
     self.searchBox = MedaUI:CreateSearchBox(toolbar, 128)
-    self.searchBox:SetPoint("LEFT", self.gcBtn, "RIGHT", 6, 0)
     self.searchBox:SetPlaceholder("Search...")
     self.searchBox.OnSearch = function(_, text)
         self.searchText = text or ""
@@ -228,12 +334,34 @@ function MainHost:InitializeToolbar()
         end
     end
 
-    self.settingsBtn = MedaUI:CreateButton(toolbar, "Settings", 60, 22)
-    self.settingsBtn:SetPoint("LEFT", self.searchBox, "RIGHT", 6, 0)
-    self.settingsBtn:SetScript("OnClick", function()
-        if MedaDebug.ToggleSettings then
-            MedaDebug:ToggleSettings()
-        end
+    self.actionsBtn = MedaUI:CreateButton(toolbar, "Actions", 58, 22)
+    self.actionsBtn:SetScript("OnClick", function()
+        local menu = MedaUI:CreateContextMenu({
+            {
+                label = "Settings",
+                onClick = function()
+                    if MedaDebug.ToggleSettings then
+                        MedaDebug:ToggleSettings()
+                    end
+                end,
+            },
+            {
+                label = "Reload UI",
+                onClick = function()
+                    ReloadUI()
+                end,
+            },
+            {
+                label = "Collect Garbage",
+                onClick = function()
+                    local before = collectgarbage("count")
+                    collectgarbage("collect")
+                    local after = collectgarbage("count")
+                    MedaDebug:LogInternal("MedaDebug", string.format("Garbage collected: %.1f KB freed", before - after), "INFO")
+                end,
+            },
+        })
+        menu:ShowAtCursor()
     end)
 end
 
@@ -253,7 +381,7 @@ function MainHost:Initialize()
 
     self.frame = MedaUI:CreatePanel("MedaDebugFrame", 980, 620, "MedaDebug")
     self.frame:SetResizable(true, {
-        minWidth = 760,
+        minWidth = 900,
         minHeight = 480,
     })
 

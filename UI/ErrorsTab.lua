@@ -392,6 +392,27 @@ function ErrorsTab:Clear()
     self:RefreshData()
 end
 
+function ErrorsTab:Copy()
+    if not MedaDebug.ErrorHandler then
+        return
+    end
+
+    if self.selectedError and self.viewData then
+        for i = 1, #self.viewData do
+            local entry = self.viewData[i]
+            if entry and entry.id == self.selectedError then
+                self:CopyError(entry)
+                return
+            end
+        end
+    end
+
+    local firstVisible = self.viewData and self.viewData[1]
+    if firstVisible then
+        self:CopyError(firstVisible)
+    end
+end
+
 function ErrorsTab:OnShow()
     self:RefreshData()
 end
@@ -415,6 +436,10 @@ if MedaDebug.WorkspaceRegistry then
         summary = "Suppress noisy signatures, inspect grouped stacks, or jump here from error notifications.",
         moduleKey = "ErrorsTab",
         height = 1200,
+        useAddonFilter = true,
+        useGlobalSearch = true,
+        useGlobalClear = true,
+        useGlobalCopy = true,
         groupId = "streams",
         groupLabel = "Streams",
         groupOrder = 10,

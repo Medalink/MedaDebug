@@ -15,6 +15,10 @@ TimersTab.scrollList = nil
 TimersTab.addonFilter = "all"
 TimersTab.lastUpdate = 0
 
+local TIMER_FILTER_OPTIONS = {
+    { value = "all", label = "All Addons" },
+}
+
 local function SetFontStringText(fontString, text)
     text = text or ""
     if fontString._medaText ~= text then
@@ -67,6 +71,44 @@ local function BuildCountdownText(timer)
     return countdownText
 end
 
+function TimersTab:BuildToolbar(parent)
+    local Theme = MedaUI.Theme or MedaUI:GetTheme()
+
+    self.enabledCheckbox = MedaUI:CreateCheckbox(parent, "Enabled")
+    self.enabledCheckbox:SetPoint("LEFT", parent, "LEFT", 0, 0)
+    self.enabledCheckbox.OnValueChanged = function(_, checked)
+        MedaDebug.db.options.enableTimerTracking = checked
+        if checked then
+            if MedaDebug.TimerTracker then MedaDebug.TimerTracker:Enable() end
+        else
+            if MedaDebug.TimerTracker then MedaDebug.TimerTracker:Disable() end
+        end
+        self:UpdateEnabledState()
+    end
+
+    self.filterDropdown = MedaUI:CreateDropdown(parent, 120, TIMER_FILTER_OPTIONS)
+    self.filterDropdown:SetPoint("LEFT", self.enabledCheckbox, "RIGHT", 10, 0)
+    self.filterDropdown.OnValueChanged = function(_, value)
+        self.addonFilter = value
+        self:RefreshData()
+    end
+
+    self.countLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.countLabel:SetPoint("LEFT", self.filterDropdown, "RIGHT", 8, 0)
+    self.countLabel:SetPoint("RIGHT", parent, "RIGHT", -4, 0)
+    self.countLabel:SetJustifyH("LEFT")
+    self.countLabel:SetWordWrap(false)
+    self.countLabel:SetTextColor(unpack(Theme.textDim))
+end
+
+function TimersTab:RefreshToolbar()
+    self:UpdateEnabledState()
+    self:RefreshFilterDropdown()
+    if self.filterDropdown then
+        self.filterDropdown:SetSelected(self.addonFilter or "all")
+    end
+end
+
 function TimersTab:Initialize(parent)
     self.frame = parent
     local Theme = MedaUI:GetTheme()
@@ -93,42 +135,14 @@ function TimersTab:Initialize(parent)
         self:UpdateEnabledState()
     end)
     
-    -- Toggle checkbox in toolbar (shown when enabled)
-    self.enabledCheckbox = MedaUI:CreateCheckbox(parent, "Enabled")
-    self.enabledCheckbox:SetPoint("TOPRIGHT", -4, 2)
-    self.enabledCheckbox.OnValueChanged = function(_, checked)
-        MedaDebug.db.options.enableTimerTracking = checked
-        if checked then
-            if MedaDebug.TimerTracker then MedaDebug.TimerTracker:Enable() end
-        else
-            if MedaDebug.TimerTracker then MedaDebug.TimerTracker:Disable() end
-        end
-        self:UpdateEnabledState()
-    end
-    
-    -- Filter dropdown
-    self.filterDropdown = MedaUI:CreateDropdown(parent, 120, {
-        {value = "all", label = "All Addons"},
-    })
-    self.filterDropdown:SetPoint("TOPLEFT", 0, 0)
-    self.filterDropdown.OnValueChanged = function(_, value)
-        self.addonFilter = value
-        self:RefreshData()
-    end
-    
-    -- Timer count
-    self.countLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.countLabel:SetPoint("LEFT", self.filterDropdown, "RIGHT", 8, 0)
-    self.countLabel:SetTextColor(unpack(Theme.textDim))
-    
     -- Scroll list
-    self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight() - 30, {
+    self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight(), {
         rowHeight = 40,
         renderRow = function(row, data, index)
             self:RenderRow(row, data, index)
         end,
     })
-    self.scrollList:SetPoint("TOPLEFT", 0, -28)
+    self.scrollList:SetPoint("TOPLEFT", 0, 0)
     self.scrollList:SetPoint("BOTTOMRIGHT", 0, 0)
     
     -- Connect to timer tracker
@@ -209,25 +223,49 @@ function TimersTab:UpdateEnabledState()
     local enabled = MedaDebug.TimerTracker and MedaDebug.TimerTracker:IsEnabled()
     
     -- Update checkbox state
-    self.enabledCheckbox:SetChecked(enabled)
+    if self.enabledCheckbox then
+        self.enabledCheckbox:SetChecked(enabled)
+    end
     
     if enabled then
-        self.disabledMsg:Hide()
-        self.disabledHint:Hide()
-        self.enableBtn:Hide()
-        self.filterDropdown:Show()
-        self.countLabel:Show()
-        self.scrollList:Show()
-        self.enabledCheckbox:Show()
+        if self.disabledMsg then
+            self.disabledMsg:Hide()
+        end
+        if self.disabledHint then
+            self.disabledHint:Hide()
+        end
+        if self.enableBtn then
+            self.enableBtn:Hide()
+        end
+        if self.scrollList then
+            self.scrollList:Show()
+        end
+        if self.filterDropdown then
+            self.filterDropdown:Show()
+        end
+        if self.countLabel then
+            self.countLabel:Show()
+        end
         self:StartVisibleUpdates()
     else
-        self.disabledMsg:Show()
-        self.disabledHint:Show()
-        self.enableBtn:Show()
-        self.filterDropdown:Hide()
-        self.countLabel:Hide()
-        self.scrollList:Hide()
-        self.enabledCheckbox:Hide()
+        if self.disabledMsg then
+            self.disabledMsg:Show()
+        end
+        if self.disabledHint then
+            self.disabledHint:Show()
+        end
+        if self.enableBtn then
+            self.enableBtn:Show()
+        end
+        if self.scrollList then
+            self.scrollList:Hide()
+        end
+        if self.filterDropdown then
+            self.filterDropdown:Hide()
+        end
+        if self.countLabel then
+            self.countLabel:Hide()
+        end
         self:StopVisibleUpdates()
     end
 end
@@ -326,6 +364,7 @@ function TimersTab:RefreshFilterDropdown()
     end
     
     self.filterDropdown:SetOptions(options)
+    self.filterDropdown:SetSelected(self.addonFilter or "all")
 end
 
 function TimersTab:OnUpdate(elapsed)
@@ -361,6 +400,7 @@ if MedaDebug.WorkspaceRegistry then
         summary = "This page is most useful when timer tracking is enabled for a short, focused capture.",
         moduleKey = "TimersTab",
         height = 1000,
+        useGlobalClear = false,
         groupId = "runtime",
         groupLabel = "Runtime",
         groupOrder = 30,

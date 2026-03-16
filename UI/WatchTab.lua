@@ -12,37 +12,28 @@ MedaDebug.WatchTab = WatchTab
 WatchTab.frame = nil
 WatchTab.treeView = nil
 
-function WatchTab:Initialize(parent)
-    self.frame = parent
-    
-    -- Add watch input
-    self.addInput = MedaUI:CreateEditBox(parent, 200, 24)
-    self.addInput:SetPoint("TOPLEFT", 0, 0)
+function WatchTab:BuildToolbar(parent)
+    self.addInput = MedaUI:CreateEditBox(parent, 220, 24)
+    self.addInput:SetPoint("LEFT", parent, "LEFT", 0, 0)
     self.addInput:SetPlaceholder("Variable path (e.g. MyAddon.db)")
-    
+
     self.addBtn = MedaUI:CreateButton(parent, "Add", 50, 22)
-    self.addBtn:SetPoint("LEFT", self.addInput, "RIGHT", 4, 0)
+    self.addBtn:SetPoint("LEFT", self.addInput, "RIGHT", 6, 0)
     self.addBtn:SetScript("OnClick", function()
         self:AddWatch()
     end)
-    
+
     self.addInput.OnEnterPressed = function()
         self:AddWatch()
     end
-    
-    -- Clear all button
-    self.clearBtn = MedaUI:CreateButton(parent, "Clear All", 70, 22)
-    self.clearBtn:SetPoint("LEFT", self.addBtn, "RIGHT", 8, 0)
-    self.clearBtn:SetScript("OnClick", function()
-        if MedaDebug.VariableWatch then
-            MedaDebug.VariableWatch:ClearAll()
-        end
-        self:RefreshData()
-    end)
-    
+end
+
+function WatchTab:Initialize(parent)
+    self.frame = parent
+
     -- Tree view for watches
-    self.treeView = MedaUI:CreateTreeView(parent, parent:GetWidth(), parent:GetHeight() - 30)
-    self.treeView:SetPoint("TOPLEFT", 0, -28)
+    self.treeView = MedaUI:CreateTreeView(parent, parent:GetWidth(), parent:GetHeight())
+    self.treeView:SetPoint("TOPLEFT", 0, 0)
     self.treeView:SetPoint("BOTTOMRIGHT", 0, 0)
     
     self.treeView.OnNodeClick = function(_, node, path)
@@ -196,6 +187,7 @@ if MedaDebug.WorkspaceRegistry then
         summary = "Use `/mdebug var <path>` to add watches from slash commands.",
         moduleKey = "WatchTab",
         height = 1000,
+        useGlobalClear = true,
         groupId = "tools",
         groupLabel = "Tools",
         groupOrder = 20,

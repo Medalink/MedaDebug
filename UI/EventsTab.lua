@@ -17,6 +17,16 @@ EventsTab.searchText = ""
 EventsTab.searchLower = nil
 EventsTab.viewData = nil
 
+local EVENT_CATEGORIES = {
+    { value = "all", label = "All Events" },
+    { value = "addon", label = "Addon" },
+    { value = "unit", label = "Unit" },
+    { value = "combat", label = "Combat" },
+    { value = "spell", label = "Spell" },
+    { value = "player", label = "Player" },
+    { value = "other", label = "Other" },
+}
+
 local function SetFontStringText(fontString, text)
     text = text or ""
     if fontString._medaText ~= text then
@@ -66,6 +76,52 @@ function EventsTab:FindVisibleRow(entry)
     return nil
 end
 
+function EventsTab:BuildToolbar(parent)
+    local Theme = MedaUI.Theme or MedaUI:GetTheme()
+
+    self.enabledCheckbox = MedaUI:CreateCheckbox(parent, "Enabled")
+    self.enabledCheckbox:SetPoint("LEFT", parent, "LEFT", 0, 0)
+    self.enabledCheckbox.OnValueChanged = function(_, checked)
+        MedaDebug.db.options.enableEventMonitor = checked
+        if checked then
+            if MedaDebug.EventMonitor then MedaDebug.EventMonitor:Enable() end
+        else
+            if MedaDebug.EventMonitor then MedaDebug.EventMonitor:Disable() end
+        end
+        self:UpdateEnabledState()
+    end
+
+    self.categoryDropdown = MedaUI:CreateDropdown(parent, 100, EVENT_CATEGORIES)
+    self.categoryDropdown:SetPoint("LEFT", self.enabledCheckbox, "RIGHT", 10, 0)
+    self.categoryDropdown.OnValueChanged = function(_, value)
+        self.categoryFilter = value
+        self:RefreshData()
+    end
+
+    self.pauseBtn = MedaUI:CreateButton(parent, "Pause", 60, 22)
+    self.pauseBtn:SetPoint("LEFT", self.categoryDropdown, "RIGHT", 8, 0)
+    self.pauseBtn:SetScript("OnClick", function()
+        self:TogglePause()
+    end)
+
+    self.countLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.countLabel:SetPoint("LEFT", self.pauseBtn, "RIGHT", 8, 0)
+    self.countLabel:SetPoint("RIGHT", parent, "RIGHT", -4, 0)
+    self.countLabel:SetJustifyH("LEFT")
+    self.countLabel:SetWordWrap(false)
+    self.countLabel:SetTextColor(unpack(Theme.textDim))
+end
+
+function EventsTab:RefreshToolbar()
+    if self.categoryDropdown then
+        self.categoryDropdown:SetSelected(self.categoryFilter or "all")
+    end
+    if self.pauseBtn then
+        self.pauseBtn:SetText(self.isPaused and "Resume" or "Pause")
+    end
+    self:UpdateEnabledState()
+end
+
 function EventsTab:Initialize(parent)
     self.frame = parent
     local Theme = MedaUI:GetTheme()
@@ -92,57 +148,14 @@ function EventsTab:Initialize(parent)
         self:UpdateEnabledState()
     end)
     
-    -- Toggle checkbox in toolbar (shown when enabled)
-    self.enabledCheckbox = MedaUI:CreateCheckbox(parent, "Enabled")
-    self.enabledCheckbox:SetPoint("TOPRIGHT", -4, 2)
-    self.enabledCheckbox.OnValueChanged = function(_, checked)
-        MedaDebug.db.options.enableEventMonitor = checked
-        if checked then
-            if MedaDebug.EventMonitor then MedaDebug.EventMonitor:Enable() end
-        else
-            if MedaDebug.EventMonitor then MedaDebug.EventMonitor:Disable() end
-        end
-        self:UpdateEnabledState()
-    end
-    
-    -- Category dropdown at top
-    local categories = {
-        {value = "all", label = "All Events"},
-        {value = "addon", label = "Addon"},
-        {value = "unit", label = "Unit"},
-        {value = "combat", label = "Combat"},
-        {value = "spell", label = "Spell"},
-        {value = "player", label = "Player"},
-        {value = "other", label = "Other"},
-    }
-    
-    self.categoryDropdown = MedaUI:CreateDropdown(parent, 100, categories)
-    self.categoryDropdown:SetPoint("TOPLEFT", 0, 0)
-    self.categoryDropdown.OnValueChanged = function(_, value)
-        self.categoryFilter = value
-        self:RefreshData()
-    end
-    
-    -- Pause button
-    self.pauseBtn = MedaUI:CreateButton(parent, "Pause", 60, 22)
-    self.pauseBtn:SetPoint("LEFT", self.categoryDropdown, "RIGHT", 8, 0)
-    self.pauseBtn:SetScript("OnClick", function()
-        self:TogglePause()
-    end)
-    
-    -- Event count
-    self.countLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.countLabel:SetPoint("LEFT", self.pauseBtn, "RIGHT", 8, 0)
-    self.countLabel:SetTextColor(unpack(Theme.textDim))
-    
     -- Scroll list
-    self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight() - 30, {
+    self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight(), {
         rowHeight = 24,
         renderRow = function(row, data, index)
             self:RenderRow(row, data, index)
         end,
     })
-    self.scrollList:SetPoint("TOPLEFT", 0, -28)
+    self.scrollList:SetPoint("TOPLEFT", 0, 0)
     self.scrollList:SetPoint("BOTTOMRIGHT", 0, 0)
     
     -- Connect to event monitor
@@ -202,26 +215,54 @@ function EventsTab:UpdateEnabledState()
     local enabled = MedaDebug.EventMonitor and MedaDebug.EventMonitor:IsEnabled()
     
     -- Update checkbox state
-    self.enabledCheckbox:SetChecked(enabled)
+    if self.enabledCheckbox then
+        self.enabledCheckbox:SetChecked(enabled)
+    end
     
     if enabled then
-        self.disabledMsg:Hide()
-        self.disabledHint:Hide()
-        self.enableBtn:Hide()
-        self.categoryDropdown:Show()
-        self.pauseBtn:Show()
-        self.countLabel:Show()
-        self.scrollList:Show()
-        self.enabledCheckbox:Show()
+        if self.disabledMsg then
+            self.disabledMsg:Hide()
+        end
+        if self.disabledHint then
+            self.disabledHint:Hide()
+        end
+        if self.enableBtn then
+            self.enableBtn:Hide()
+        end
+        if self.scrollList then
+            self.scrollList:Show()
+        end
+        if self.categoryDropdown then
+            self.categoryDropdown:Show()
+        end
+        if self.pauseBtn then
+            self.pauseBtn:Show()
+        end
+        if self.countLabel then
+            self.countLabel:Show()
+        end
     else
-        self.disabledMsg:Show()
-        self.disabledHint:Show()
-        self.enableBtn:Show()
-        self.categoryDropdown:Hide()
-        self.pauseBtn:Hide()
-        self.countLabel:Hide()
-        self.scrollList:Hide()
-        self.enabledCheckbox:Hide()
+        if self.disabledMsg then
+            self.disabledMsg:Show()
+        end
+        if self.disabledHint then
+            self.disabledHint:Show()
+        end
+        if self.enableBtn then
+            self.enableBtn:Show()
+        end
+        if self.scrollList then
+            self.scrollList:Hide()
+        end
+        if self.categoryDropdown then
+            self.categoryDropdown:Hide()
+        end
+        if self.pauseBtn then
+            self.pauseBtn:Hide()
+        end
+        if self.countLabel then
+            self.countLabel:Hide()
+        end
     end
 end
 
@@ -342,6 +383,8 @@ if MedaDebug.WorkspaceRegistry then
         summary = "Enable only when needed; this page is intended for targeted runtime inspection.",
         moduleKey = "EventsTab",
         height = 1200,
+        useGlobalSearch = true,
+        useGlobalClear = true,
         groupId = "streams",
         groupLabel = "Streams",
         groupOrder = 10,

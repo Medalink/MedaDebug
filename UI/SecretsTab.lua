@@ -13,47 +13,28 @@ MedaDebug.SecretsTab = SecretsTab
 SecretsTab.frame = nil
 SecretsTab.scrollList = nil
 SecretsTab.searchResults = {}
+SecretsTab.searchQuery = ""
 
-function SecretsTab:Initialize(parent)
-    self.frame = parent
-    local Theme = MedaUI:GetTheme()
-
-    -- Top row: Refresh, Copy All buttons
+function SecretsTab:BuildToolbar(parent)
     self.refreshBtn = MedaUI:CreateButton(parent, "Refresh", 70, 22)
-    self.refreshBtn:SetPoint("TOPLEFT", 0, 0)
+    self.refreshBtn:SetPoint("LEFT", parent, "LEFT", 0, 0)
     self.refreshBtn:SetScript("OnClick", function()
         self:RefreshAll()
     end)
 
     self.copyAllBtn = MedaUI:CreateButton(parent, "Copy All", 70, 22)
-    self.copyAllBtn:SetPoint("LEFT", self.refreshBtn, "RIGHT", 4, 0)
+    self.copyAllBtn:SetPoint("LEFT", self.refreshBtn, "RIGHT", 6, 0)
     self.copyAllBtn:SetScript("OnClick", function()
         self:CopyAll()
     end)
+end
 
-    -- Search row (below buttons with proper spacing)
-    self.searchLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.searchLabel:SetPoint("LEFT", self.copyAllBtn, "RIGHT", 16, 0)
-    self.searchLabel:SetText("Search:")
-    self.searchLabel:SetTextColor(unpack(Theme.text))
-
-    self.searchInput = MedaUI:CreateEditBox(parent, 150, 22)
-    self.searchInput:SetPoint("LEFT", self.searchLabel, "RIGHT", 4, 0)
-    self.searchInput:SetPlaceholder("mana, health, aura...")
-
-    self.searchBtn = MedaUI:CreateButton(parent, "Search", 60, 22)
-    self.searchBtn:SetPoint("LEFT", self.searchInput, "RIGHT", 4, 0)
-    self.searchBtn:SetScript("OnClick", function()
-        self:DoSearch()
-    end)
-
-    self.searchInput.OnEnterPressed = function()
-        self:DoSearch()
-    end
+function SecretsTab:Initialize(parent)
+    self.frame = parent
 
     -- Main content area - create a container for scrolling
     self.contentContainer = CreateFrame("Frame", nil, parent)
-    self.contentContainer:SetPoint("TOPLEFT", 0, -28)
+    self.contentContainer:SetPoint("TOPLEFT", 0, 0)
     self.contentContainer:SetPoint("BOTTOMRIGHT", 0, 0)
 
     -- Scroll frame (AF custom scrollbar)
@@ -97,7 +78,7 @@ function SecretsTab:BuildSections()
     -- Placeholder text for search results
     self.searchPlaceholder = self.searchResultsContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.searchPlaceholder:SetPoint("TOPLEFT", 4, -4)
-    self.searchPlaceholder:SetText("Enter a search term above (e.g., mana, health, aura)")
+    self.searchPlaceholder:SetText("Use the workspace search box (e.g., mana, health, aura)")
     self.searchPlaceholder:SetTextColor(unpack(Theme.textDim))
 
     -- Context & Simulation Section
@@ -296,7 +277,7 @@ function SecretsTab:BuildRestrictionsContent()
 end
 
 function SecretsTab:DoSearch()
-    local query = self.searchInput:GetText()
+    local query = self.searchQuery or ""
     if not query or query == "" then
         self.searchPlaceholder:Show()
         self:ClearSearchResults()
@@ -555,7 +536,7 @@ function SecretsTab:RefreshAll()
     self:RefreshRestrictions()
 
     -- Re-run search if we have one
-    local query = self.searchInput and self.searchInput:GetText()
+    local query = self.searchQuery
     if query and query ~= "" then
         self:DoSearch()
     end
@@ -575,11 +556,9 @@ function SecretsTab:OnShow()
 end
 
 function SecretsTab:Clear()
+    self.searchQuery = ""
     self:ClearSearchResults()
-    if self.searchInput then
-        self.searchInput:SetText("")
-    end
-    self.searchPlaceholder:SetText("Enter a search term above (e.g., mana, health, aura)")
+    self.searchPlaceholder:SetText("Use the workspace search box (e.g., mana, health, aura)")
     self.searchPlaceholder:Show()
     self.searchResultsSection:SetHeight(80)
     self.searchResultsSection.height = 80
@@ -592,10 +571,8 @@ end
 
 function SecretsTab:OnSearch(text)
     -- Global search from the workspace host
-    if self.searchInput then
-        self.searchInput:SetText(text)
-        self:DoSearch()
-    end
+    self.searchQuery = text or ""
+    self:DoSearch()
 end
 
 if MedaDebug.WorkspaceRegistry then
@@ -606,6 +583,8 @@ if MedaDebug.WorkspaceRegistry then
         summary = "Use this page to map secret access seams and verify safe inspection patterns.",
         moduleKey = "SecretsTab",
         height = 1800,
+        useGlobalSearch = true,
+        useGlobalClear = true,
         groupId = "runtime",
         groupLabel = "Runtime",
         groupOrder = 30,

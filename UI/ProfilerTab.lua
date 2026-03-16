@@ -14,6 +14,16 @@ ProfilerTab.scrollList = nil
 ProfilerTab.categoryFilter = "all"
 ProfilerTab.searchText = ""
 
+local PROFILER_CATEGORIES = {
+    { value = "all", label = "All Categories" },
+    { value = "ui", label = "UI" },
+    { value = "event", label = "Events" },
+    { value = "timer", label = "Timers" },
+    { value = "frame", label = "Frames" },
+    { value = "output", label = "Output" },
+    { value = "system", label = "System" },
+}
+
 local function SafeContains(text, search)
     if type(text) ~= "string" or search == "" then
         return false
@@ -29,12 +39,11 @@ local function SafeContains(text, search)
     return lowerText:find(search, 1, true) ~= nil
 end
 
-function ProfilerTab:Initialize(parent)
-    self.frame = parent
-    local Theme = MedaUI:GetTheme()
+function ProfilerTab:BuildToolbar(parent)
+    local Theme = MedaUI.Theme or MedaUI:GetTheme()
 
     self.enabledCheckbox = MedaUI:CreateCheckbox(parent, "Capture")
-    self.enabledCheckbox:SetPoint("TOPLEFT", 0, 0)
+    self.enabledCheckbox:SetPoint("LEFT", parent, "LEFT", 0, 0)
     self.enabledCheckbox.OnValueChanged = function(_, checked)
         if MedaDebug.ProfilerLite then
             MedaDebug.ProfilerLite:SetEnabled(checked)
@@ -42,40 +51,37 @@ function ProfilerTab:Initialize(parent)
         self:RefreshData()
     end
 
-    self.categoryDropdown = MedaUI:CreateDropdown(parent, 120, {
-        {value = "all", label = "All Categories"},
-        {value = "ui", label = "UI"},
-        {value = "event", label = "Events"},
-        {value = "timer", label = "Timers"},
-        {value = "frame", label = "Frames"},
-        {value = "output", label = "Output"},
-        {value = "system", label = "System"},
-    })
+    self.categoryDropdown = MedaUI:CreateDropdown(parent, 120, PROFILER_CATEGORIES)
     self.categoryDropdown:SetPoint("LEFT", self.enabledCheckbox, "RIGHT", 10, 0)
     self.categoryDropdown.OnValueChanged = function(_, value)
         self.categoryFilter = value
         self:RefreshData()
     end
 
-    self.clearBtn = MedaUI:CreateButton(parent, "Clear", 60, 22)
-    self.clearBtn:SetPoint("LEFT", self.categoryDropdown, "RIGHT", 8, 0)
-    self.clearBtn:SetScript("OnClick", function()
-        if MedaDebug.ProfilerLite then
-            MedaDebug.ProfilerLite:Clear()
-        end
-    end)
-
     self.summaryText = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.summaryText:SetPoint("LEFT", self.clearBtn, "RIGHT", 10, 0)
+    self.summaryText:SetPoint("LEFT", self.categoryDropdown, "RIGHT", 10, 0)
+    self.summaryText:SetPoint("RIGHT", parent, "RIGHT", -4, 0)
+    self.summaryText:SetJustifyH("LEFT")
+    self.summaryText:SetWordWrap(false)
     self.summaryText:SetTextColor(unpack(Theme.textDim))
+end
 
-    self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight() - 30, {
+function ProfilerTab:RefreshToolbar()
+    if self.categoryDropdown then
+        self.categoryDropdown:SetSelected(self.categoryFilter or "all")
+    end
+    self:RefreshData()
+end
+
+function ProfilerTab:Initialize(parent)
+    self.frame = parent
+    self.scrollList = MedaUI:CreateScrollList(parent, parent:GetWidth(), parent:GetHeight(), {
         rowHeight = 24,
         renderRow = function(row, data)
             self:RenderRow(row, data)
         end,
     })
-    self.scrollList:SetPoint("TOPLEFT", 0, -28)
+    self.scrollList:SetPoint("TOPLEFT", 0, 0)
     self.scrollList:SetPoint("BOTTOMRIGHT", 0, 0)
 
     if MedaDebug.ProfilerLite then
@@ -222,6 +228,8 @@ if MedaDebug.WorkspaceRegistry then
         summary = "Use this to inspect UI, timer, and output costs while the workspace is open.",
         moduleKey = "ProfilerTab",
         height = 1000,
+        useGlobalSearch = true,
+        useGlobalClear = true,
         groupId = "runtime",
         groupLabel = "Runtime",
         groupOrder = 30,

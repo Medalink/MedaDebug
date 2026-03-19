@@ -7,6 +7,7 @@ local _, MedaDebug = ...
 
 local API = {}
 MedaDebug.API = API
+local debugstack = debugstack
 
 -- Registered addons
 API.registeredAddons = {}
@@ -18,6 +19,77 @@ local LEVEL_COLORS = {
     WARN = {1, 0.8, 0},
     ERROR = {1, 0.3, 0.3},
 }
+
+local function BuildSourceInfo(addonName)
+    if type(addonName) ~= "string" or addonName == "" or not debugstack then
+        return nil
+    end
+
+    local ok, stack = pcall(debugstack, 4, 16, 0)
+    if not ok or type(stack) ~= "string" or stack == "" then
+        return nil
+    end
+
+    local fallback
+
+    for line in stack:gmatch("[^\n]+") do
+        local stackAddon, relativePath = line:match("AddOns/([^/]+)/([^:\n]+%.lua)")
+        if not stackAddon then
+            stackAddon, relativePath = line:match("AddOns\\([^\\]+)\\([^:\n]+%.lua)")
+        end
+
+        if stackAddon == addonName and relativePath then
+            relativePath = relativePath:gsub("\\", "/")
+
+            local root, rest = relativePath:match("^([^/]+)/(.+)$")
+            local sourceKind
+            local sourceName
+
+            if root == "Modules" and rest then
+                sourceKind = "module"
+                sourceName = rest:match("^([^/]+)") or rest
+            elseif root == "Services" and rest then
+                sourceKind = "service"
+                sourceName = rest:match("^([^/]+)") or rest
+            elseif root == "Core" and rest then
+                sourceKind = "core"
+                sourceName = rest:match("^([^/]+)") or rest
+            end
+
+            if sourceKind and sourceName then
+                sourceName = sourceName:gsub("%.lua$", "")
+
+                local label = addonName .. " / " .. sourceName
+                if sourceKind == "service" then
+                    label = addonName .. " / Service: " .. sourceName
+                elseif sourceKind == "core" then
+                    label = addonName .. " / Core: " .. sourceName
+                end
+
+                local candidate = {
+                    kind = sourceKind,
+                    name = sourceName,
+                    relativePath = relativePath,
+                    label = label,
+                    filter = table.concat({
+                        "source",
+                        addonName,
+                        sourceKind,
+                        sourceName,
+                    }, ":"),
+                }
+
+                if sourceKind ~= "core" then
+                    return candidate
+                end
+
+                fallback = fallback or candidate
+            end
+        end
+    end
+
+    return fallback
+end
 
 --- Register an addon for debug output
 --- @param addonName string The addon name
@@ -65,6 +137,7 @@ end
 -- Internal output function
 function API:Output(addonName, message, level)
     level = level or "INFO"
+    local sourceInfo = BuildSourceInfo(addonName)
     
     -- Create entry
     local entry = {
@@ -74,6 +147,11 @@ function API:Output(addonName, message, level)
         level = level,
         message = tostring(message),
         levelColor = LEVEL_COLORS[level] or LEVEL_COLORS.INFO,
+        sourceKind = sourceInfo and sourceInfo.kind or nil,
+        sourceName = sourceInfo and sourceInfo.name or nil,
+        sourcePath = sourceInfo and sourceInfo.relativePath or nil,
+        sourceLabel = sourceInfo and sourceInfo.label or nil,
+        sourceFilter = sourceInfo and sourceInfo.filter or nil,
     }
     
     -- Get addon color

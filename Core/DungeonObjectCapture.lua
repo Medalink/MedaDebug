@@ -26,39 +26,98 @@ local function GetOptions()
     return MedaDebug.db and MedaDebug.db.options or nil
 end
 
+local function IsSecretValue(value)
+    if value == nil then
+        return false
+    end
+
+    if issecretvalue then
+        local ok, result = pcall(issecretvalue, value)
+        if ok then
+            return result
+        end
+    end
+
+    local valueType = type(value)
+    if valueType == "number" then
+        local ok = pcall(function()
+            return value + 0
+        end)
+        return not ok
+    end
+
+    if valueType == "string" then
+        local ok = pcall(function()
+            return value == value
+        end)
+        return not ok
+    end
+
+    return false
+end
+
+local function SafeValue(value)
+    if value == nil or IsSecretValue(value) then
+        return nil
+    end
+
+    return value
+end
+
 local function SafeToString(value)
     if value == nil then
         return nil
     end
 
     local ok, text = pcall(tostring, value)
-    if ok and text ~= "" then
-        return text
+    if ok and type(text) == "string" and not IsSecretValue(text) then
+        local nonEmptyOk, isNonEmpty = pcall(function()
+            return text ~= ""
+        end)
+        if nonEmptyOk and isNonEmpty then
+            return text
+        end
     end
 
     return nil
 end
 
 local function Trim(text)
-    if type(text) ~= "string" then
+    if type(text) ~= "string" or IsSecretValue(text) then
         return nil
     end
 
-    local trimmed = text:gsub("^%s+", ""):gsub("%s+$", "")
-    if trimmed == "" then
+    local ok, trimmed = pcall(function()
+        return text:gsub("^%s+", ""):gsub("%s+$", "")
+    end)
+    if not ok or type(trimmed) ~= "string" or IsSecretValue(trimmed) then
         return nil
     end
 
-    return trimmed
+    local nonEmptyOk, isNonEmpty = pcall(function()
+        return trimmed ~= ""
+    end)
+    if nonEmptyOk and isNonEmpty then
+        return trimmed
+    end
+
+    return nil
 end
 
 local function BuildLower(text)
-    if type(text) ~= "string" or text == "" then
+    if type(text) ~= "string" or IsSecretValue(text) then
+        return nil
+    end
+
+    local nonEmptyOk, isNonEmpty = pcall(function()
+        return text ~= ""
+    end)
+    if not nonEmptyOk or not isNonEmpty then
         return nil
     end
 
     local ok, lowered = pcall(string.lower, text)
-    if ok then
+    if ok and type(lowered) == "string" and not IsSecretValue(lowered) then
         return lowered
     end
 
@@ -230,12 +289,20 @@ local function SerializeValue(value, depth, visited)
     end
 
     local valueType = type(value)
-    if valueType == "nil" or valueType == "number" or valueType == "boolean" then
-        return tostring(value)
+    if valueType == "nil" then
+        return "nil"
+    end
+
+    if valueType == "number" or valueType == "boolean" then
+        return SafeToString(value) or "<secret>"
     end
 
     if valueType == "string" then
-        return string.format("%q", value)
+        local text = SafeToString(value)
+        if not text then
+            return string.format("%q", "<secret>")
+        end
+        return string.format("%q", text)
     end
 
     if valueType ~= "table" then
@@ -272,18 +339,49 @@ end
 
 local function CopyPlainTable(source)
     if type(source) ~= "table" then
-        return source
+        return SafeValue(source)
+    end
+
+    if IsSecretValue(source) then
+        return nil
     end
 
     local target = {}
     for key, value in pairs(source) do
-        if type(value) == "table" then
-            target[key] = CopyPlainTable(value)
-        elseif type(value) ~= "function" and type(value) ~= "userdata" and type(value) ~= "thread" then
-            target[key] = value
+        local safeKey = SafeValue(key)
+        if safeKey ~= nil then
+            if type(value) == "table" then
+                local copy = CopyPlainTable(value)
+                if copy ~= nil then
+                    target[safeKey] = copy
+                end
+            elseif type(value) ~= "function" and type(value) ~= "userdata" and type(value) ~= "thread" then
+                local safeValue = SafeValue(value)
+                if safeValue ~= nil then
+                    target[safeKey] = safeValue
+                end
+            end
         end
     end
     return target
+end
+
+local function BuildAuraSnapshotKey(aura)
+    if type(aura) ~= "table" then
+        return nil, nil
+    end
+
+    local spellId = SafeValue(aura.spellId)
+    if type(spellId) == "number" then
+        return "spell:" .. spellId, spellId
+    end
+
+    local auraInstanceID = SafeValue(aura.auraInstanceID)
+    if type(auraInstanceID) == "number" then
+        return "instance:" .. auraInstanceID, nil
+    end
+
+    return nil, nil
 end
 
 function DungeonObjectCapture:GetStorage()
@@ -438,16 +536,18 @@ function DungeonObjectCapture:SnapshotHelpfulAuras(unit)
             break
         end
 
-        if aura.spellId then
-            snapshot[aura.spellId] = {
-                spellId = aura.spellId,
-                name = aura.name,
-                icon = aura.icon,
-                applications = aura.applications,
-                auraInstanceID = aura.auraInstanceID,
-                duration = aura.duration,
-                expirationTime = aura.expirationTime,
-                sourceUnit = aura.sourceUnit,
+        local auraKey, spellId = BuildAuraSnapshotKey(aura)
+        if auraKey then
+            snapshot[auraKey] = {
+                key = auraKey,
+                spellId = spellId,
+                name = Trim(SafeToString(aura.name)),
+                icon = SafeValue(aura.icon),
+                applications = SafeValue(aura.applications),
+                auraInstanceID = SafeValue(aura.auraInstanceID),
+                duration = SafeValue(aura.duration),
+                expirationTime = SafeValue(aura.expirationTime),
+                sourceUnit = SafeValue(aura.sourceUnit),
             }
         end
 
@@ -495,18 +595,18 @@ function DungeonObjectCapture:BuildTooltipContext(source, data, extra)
         return nil
     end
 
-    local tooltipType = data.type
+    local tooltipType = SafeValue(data.type)
     if tooltipType ~= OBJECT_TOOLTIP_TYPE and tooltipType ~= UNIT_TOOLTIP_TYPE and tooltipType ~= CORPSE_TOOLTIP_TYPE then
         return nil
     end
 
     local lines = ExtractTooltipLines(data)
-    local name = Trim(data.name) or lines[1] or Trim(data.hyperlink)
+    local name = Trim(SafeToString(data.name)) or lines[1] or Trim(SafeToString(data.hyperlink))
     if not name then
         return nil
     end
 
-    local guid = data.guid or data.objectGUID or data.unitGUID
+    local guid = SafeToString(data.guid or data.objectGUID or data.unitGUID)
     local guidType, entryID = ParseGuidInfo(guid)
     local instance = GetInstanceContext()
     if not IsDungeonInstanceContext(instance) then
@@ -526,9 +626,9 @@ function DungeonObjectCapture:BuildTooltipContext(source, data, extra)
         guid = guid,
         guidType = guidType,
         entryID = entryID,
-        dataID = data.id,
-        displayID = data.displayID,
-        hyperlink = data.hyperlink,
+        dataID = SafeValue(data.id),
+        displayID = SafeValue(data.displayID),
+        hyperlink = SafeToString(data.hyperlink),
         lines = lines,
         rawData = CopyPlainTable(data),
         instance = instance,
@@ -704,13 +804,14 @@ function DungeonObjectCapture:HandleUnitAura(unit)
     local current = self:SnapshotHelpfulAuras(unit)
     self.unitAuraState[unit] = current
 
-    for spellId, aura in pairs(current) do
-        if not previous[spellId] then
+    for auraKey, aura in pairs(current) do
+        if not previous[auraKey] then
+            local auraLabel = aura.name or (aura.spellId and ("Spell " .. aura.spellId)) or "Unknown Aura"
             self:AddOutcome("aura", {
-                label = string.format("%s gained %s", UnitName(unit) or unit, aura.name or ("Spell " .. spellId)),
+                label = string.format("%s gained %s", UnitName(unit) or unit, auraLabel),
                 unit = unit,
                 unitName = UnitName(unit),
-                spellId = spellId,
+                spellId = aura.spellId,
                 name = aura.name,
                 icon = aura.icon,
                 applications = aura.applications,

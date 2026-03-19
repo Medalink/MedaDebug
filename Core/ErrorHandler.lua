@@ -342,6 +342,26 @@ function ErrorHandler:GetErrors()
     return self.errors
 end
 
+--- Get unique source addons from captured errors.
+--- @return table
+function ErrorHandler:GetAddonsFromErrors()
+    local addonSet = {}
+    for _, err in ipairs(self.errors) do
+        local summary = err and err.summary
+        local addon = summary and summary.sourceAddon
+        if addon and addon ~= "" then
+            addonSet[addon] = true
+        end
+    end
+
+    local addons = {}
+    for addon in pairs(addonSet) do
+        addons[#addons + 1] = addon
+    end
+    table.sort(addons)
+    return addons
+end
+
 --- Get error count
 --- @return number Number of unique errors
 function ErrorHandler:GetErrorCount()

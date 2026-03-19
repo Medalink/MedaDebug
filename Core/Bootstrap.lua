@@ -80,6 +80,10 @@ local DEFAULT_DB = {
         },
         activeTab = "messages",
         filter = "all",
+        pageFilters = {
+            messages = "all",
+            errors = "all",
+        },
         navGroups = {
             streams = true,
             tools = true,

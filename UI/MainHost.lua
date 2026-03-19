@@ -16,13 +16,43 @@ MainHost.workspace = nil
 MainHost.activeTab = "messages"
 MainHost.currentFilter = "all"
 MainHost.searchText = ""
-MainHost.knownMessageAddons = {}
+MainHost.pageFilters = nil
+MainHost.knownMessageFilters = {}
 MainHost.pageToolbars = nil
 
 local TOOLBAR_WIDTH = 680
 
 local function GetFrameState()
     return MedaDebug.db and MedaDebug.db.frameState
+end
+
+local function EnsurePageFilters(frameState)
+    if not frameState then
+        return {
+            messages = "all",
+            errors = "all",
+        }
+    end
+
+    local legacyFilter = frameState.filter or "all"
+    local pageFilters = frameState.pageFilters
+    if type(pageFilters) ~= "table" then
+        pageFilters = {
+            messages = legacyFilter,
+            errors = legacyFilter,
+        }
+        frameState.pageFilters = pageFilters
+        return pageFilters
+    end
+
+    if pageFilters.messages == nil then
+        pageFilters.messages = legacyFilter
+    end
+    if pageFilters.errors == nil then
+        pageFilters.errors = legacyFilter
+    end
+
+    return pageFilters
 end
 
 local function SaveWindowState(state)
@@ -53,6 +83,30 @@ function MainHost:GetPageDefinition(pageId)
     end
 
     return WorkspaceRegistry:GetPage(pageId)
+end
+
+function MainHost:GetFilterForPage(pageId)
+    if not self.pageFilters then
+        return "all"
+    end
+
+    return self.pageFilters[pageId] or "all"
+end
+
+function MainHost:SetFilterForPage(pageId, filterValue)
+    if not pageId then
+        return
+    end
+
+    self.pageFilters = self.pageFilters or {}
+    self.pageFilters[pageId] = filterValue or "all"
+
+    if MedaDebug.db and MedaDebug.db.frameState then
+        MedaDebug.db.frameState.pageFilters = self.pageFilters
+        if pageId == self.activeTab then
+            MedaDebug.db.frameState.filter = self.pageFilters[pageId]
+        end
+    end
 end
 
 function MainHost:GetToolbarState(pageId)
@@ -240,21 +294,52 @@ function MainHost:RefreshFilterDropdown()
         return
     end
 
-    local options = {
-        { value = "all", label = "All Addons" },
-    }
-    wipe(self.knownMessageAddons)
+    local options
+    if self.activeTab == "messages" and MedaDebug.OutputManager and MedaDebug.OutputManager.GetMessageFilterOptions then
+        options = MedaDebug.OutputManager:GetMessageFilterOptions()
+        wipe(self.knownMessageFilters)
+        for i = 1, #options do
+            self.knownMessageFilters[options[i].value] = true
+        end
+    else
+        options = {
+            { value = "all", label = "All Addons" },
+        }
 
-    if MedaDebug.OutputManager then
-        local addons = MedaDebug.OutputManager:GetAddonsFromMessages()
-        for _, addon in ipairs(addons) do
-            self.knownMessageAddons[addon] = true
-            options[#options + 1] = { value = addon, label = addon }
+        if MedaDebug.ErrorHandler and MedaDebug.ErrorHandler.GetAddonsFromErrors then
+            local addons = MedaDebug.ErrorHandler:GetAddonsFromErrors()
+            for _, addon in ipairs(addons) do
+                options[#options + 1] = { value = addon, label = addon }
+            end
+        elseif MedaDebug.OutputManager then
+            local addons = MedaDebug.OutputManager:GetAddonsFromMessages()
+            for _, addon in ipairs(addons) do
+                options[#options + 1] = { value = addon, label = addon }
+            end
+        end
+    end
+
+    local selected = self:GetFilterForPage(self.activeTab)
+    local hasSelected = false
+    for i = 1, #options do
+        if options[i].value == selected then
+            hasSelected = true
+            break
+        end
+    end
+    if not hasSelected then
+        selected = "all"
+        self:SetFilterForPage(self.activeTab, selected)
+        self.currentFilter = selected
+
+        local module = self:GetActiveModule()
+        if module and module.OnFilterChanged then
+            module:OnFilterChanged(selected)
         end
     end
 
     self.filterDropdown:SetOptions(options)
-    self.filterDropdown:SetSelected(self.currentFilter or "all")
+    self.filterDropdown:SetSelected(selected)
 end
 
 function MainHost:ApplyPageChrome(pageId)
@@ -277,7 +362,7 @@ function MainHost:RegisterPages()
                 if module and module.Initialize then
                     module:Initialize(parent)
                     if module.OnFilterChanged then
-                        module:OnFilterChanged(self.currentFilter)
+                        module:OnFilterChanged(self:GetFilterForPage(pageId))
                     end
                     if module.OnSearch then
                         module:OnSearch(self.searchText or "")
@@ -297,7 +382,7 @@ function MainHost:RegisterPages()
                 local module = GetPageModule(pageId)
                 if module then
                     if module.OnFilterChanged then
-                        module:OnFilterChanged(self.currentFilter)
+                        module:OnFilterChanged(self:GetFilterForPage(pageId))
                     end
                     if module.OnSearch then
                         module:OnSearch(self.searchText or "")
@@ -317,6 +402,7 @@ function MainHost:ShowPage(pageId)
     end
 
     self.activeTab = pageId
+    self.currentFilter = self:GetFilterForPage(pageId)
     self:LayoutToolbar(pageId)
     self.workspace:SetActivePage(pageId)
     self:ApplyPageChrome(pageId)
@@ -331,6 +417,7 @@ function MainHost:ShowPage(pageId)
     if MedaDebug.db then
         MedaDebug.db.frameState.activeTab = pageId
         MedaDebug.db.frameState.filter = self.currentFilter
+        MedaDebug.db.frameState.pageFilters = self.pageFilters
     end
 end
 
@@ -339,14 +426,12 @@ function MainHost:InitializeToolbar()
 
     self.pageToolbarHost = CreateFrame("Frame", nil, toolbar)
 
-    self.filterDropdown = MedaUI:CreateDropdown(toolbar, 108, {
+    self.filterDropdown = MedaUI:CreateDropdown(toolbar, 176, {
         { value = "all", label = "All Addons" },
     })
     self.filterDropdown.OnValueChanged = function(_, value)
         self.currentFilter = value
-        if MedaDebug.db then
-            MedaDebug.db.frameState.filter = value
-        end
+        self:SetFilterForPage(self.activeTab, value)
         local module = self:GetActiveModule()
         if module and module.OnFilterChanged then
             module:OnFilterChanged(value)
@@ -415,7 +500,8 @@ function MainHost:Initialize()
     if WorkspaceRegistry and not WorkspaceRegistry:GetPage(self.activeTab) then
         self.activeTab = defaultPageId
     end
-    self.currentFilter = frameState and frameState.filter or "all"
+    self.pageFilters = EnsurePageFilters(frameState)
+    self.currentFilter = self:GetFilterForPage(self.activeTab)
     self.searchText = ""
 
     self.frame = MedaUI:CreatePanel("MedaDebugFrame", 980, 620, "MedaDebug")
@@ -504,6 +590,7 @@ function MainHost:PersistState()
     }
     MedaDebug.db.frameState.activeTab = self.activeTab or defaultPageId
     MedaDebug.db.frameState.filter = self.currentFilter or "all"
+    MedaDebug.db.frameState.pageFilters = self.pageFilters
 end
 
 function MainHost:UpdateErrorBadge()
@@ -516,10 +603,14 @@ end
 function MainHost:HandleNewMessage(entry, isUpdate)
     self:UpdateFreshness()
 
-    if entry == nil then
-        self:RefreshFilterDropdown()
-    elseif entry.addon and not self.knownMessageAddons[entry.addon] then
-        self:RefreshFilterDropdown()
+    if self.activeTab == "messages" then
+        if entry == nil then
+            self:RefreshFilterDropdown()
+        elseif entry.addon and not self.knownMessageFilters[entry.addon] then
+            self:RefreshFilterDropdown()
+        elseif entry.sourceFilter and not self.knownMessageFilters[entry.sourceFilter] then
+            self:RefreshFilterDropdown()
+        end
     end
 
     local module = GetPageModule("messages")
@@ -535,6 +626,10 @@ end
 function MainHost:HandleErrorChanged(kind, entry)
     self:UpdateFreshness()
     self:UpdateErrorBadge()
+
+    if self.activeTab == "errors" and kind == "new" then
+        self:RefreshFilterDropdown()
+    end
 
     local module = GetPageModule("errors")
     if self.activeTab ~= "errors" or not self:IsShown() or not module then

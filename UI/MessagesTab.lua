@@ -92,7 +92,7 @@ function MessagesTab:CanIncrementallyUpdate()
 end
 
 function MessagesTab:MatchesFilters(entry)
-    if self.currentFilter ~= "all" and entry.addon ~= self.currentFilter then
+    if MedaDebug.OutputManager and not MedaDebug.OutputManager:MatchesFilter(entry, self.currentFilter) then
         return false
     end
 
@@ -100,7 +100,8 @@ function MessagesTab:MatchesFilters(entry)
     if search then
         local matchesMessage = entry.searchMessage and entry.searchMessage:find(search, 1, true)
         local matchesAddon = entry.searchAddon and entry.searchAddon:find(search, 1, true)
-        if not matchesMessage and not matchesAddon then
+        local matchesSource = entry.searchSource and entry.searchSource:find(search, 1, true)
+        if not matchesMessage and not matchesAddon and not matchesSource then
             return false
         end
     end
@@ -255,6 +256,15 @@ function MessagesTab:Clear()
     self:RefreshData()
 end
 
+function MessagesTab:Copy()
+    if not MedaDebug.OutputManager then
+        return
+    end
+
+    local text = MedaDebug.OutputManager:FormatMessagesForCopy(self.viewData)
+    MedaUI:ShowTextViewer("Messages - Press Ctrl+C to copy", text)
+end
+
 function MessagesTab:OnShow()
     self:RefreshData()
 end
@@ -268,7 +278,7 @@ if MedaDebug.WorkspaceRegistry then
         label = "Messages",
         title = "Message Stream",
         subtitle = "Session output from MedaDebug-enabled addons.",
-        summary = "Filter by addon, search the active stream, or copy the current visible output.",
+        summary = "Filter by addon or MedaAuras source, search the active stream, or copy the current visible output.",
         moduleKey = "MessagesTab",
         height = 1200,
         useAddonFilter = true,

@@ -86,6 +86,7 @@ local function NormalizeEntryForUI(entry)
     entry.addonLabel = "[" .. (entry.addon or "?") .. "]"
     entry.searchMessage = BuildSearchText(entry.message)
     entry.searchAddon = BuildSearchText(entry.addon) or ""
+    entry.searchSource = BuildSearchText(entry.sourceLabel) or ""
     entry.countText = BuildCountText(entry.count)
 end
 
@@ -126,6 +127,7 @@ function OutputManager:HandleMessage(entry)
     if lastMsg then
         local ok, result = pcall(function()
             return lastMsg.addon == entry.addon
+               and lastMsg.sourceFilter == entry.sourceFilter
                and lastMsg.level == entry.level
                and lastMsg.message == entry.message
         end)
@@ -171,6 +173,11 @@ function OutputManager:HandleMessage(entry)
             addon = entry.addon,
             level = entry.level,
             message = entry.message,
+            sourceKind = entry.sourceKind,
+            sourceName = entry.sourceName,
+            sourcePath = entry.sourcePath,
+            sourceLabel = entry.sourceLabel,
+            sourceFilter = entry.sourceFilter,
         }
 
         -- Trim session log
@@ -225,6 +232,22 @@ function OutputManager:GetFilteredMessages(addonName)
         end
     end
     return filtered
+end
+
+--- Check whether a message matches the selected filter.
+--- @param entry table
+--- @param filterValue string|nil
+--- @return boolean
+function OutputManager:MatchesFilter(entry, filterValue)
+    if not entry or not filterValue or filterValue == "all" then
+        return true
+    end
+
+    if type(filterValue) == "string" and filterValue:find("source:", 1, true) == 1 then
+        return entry.sourceFilter == filterValue
+    end
+
+    return entry.addon == filterValue
 end
 
 --- Clear all messages
@@ -297,6 +320,82 @@ function OutputManager:GetAddonsFromMessages()
     return addons
 end
 
+--- Build filter options for the Messages page.
+--- @return table
+function OutputManager:GetMessageFilterOptions()
+    local options = {
+        { value = "all", label = "All Sources" },
+    }
+    local addonSet = {}
+    local sourceSet = {}
+    local sourceOptions = {}
+
+    for _, msg in ipairs(self.messages) do
+        if msg.addon and msg.addon ~= "" and not addonSet[msg.addon] then
+            addonSet[msg.addon] = true
+            options[#options + 1] = {
+                value = msg.addon,
+                label = msg.addon,
+            }
+        end
+
+        if msg.sourceFilter and msg.sourceLabel and not sourceSet[msg.sourceFilter] then
+            sourceSet[msg.sourceFilter] = true
+            sourceOptions[#sourceOptions + 1] = {
+                value = msg.sourceFilter,
+                label = msg.sourceLabel,
+            }
+        end
+    end
+
+    table.sort(options, function(a, b)
+        if a.value == "all" then
+            return true
+        end
+        if b.value == "all" then
+            return false
+        end
+        return a.label < b.label
+    end)
+    table.sort(sourceOptions, function(a, b)
+        return a.label < b.label
+    end)
+
+    for i = 1, #sourceOptions do
+        options[#options + 1] = sourceOptions[i]
+    end
+
+    return options
+end
+
+--- Format a list of messages for copy/export.
+--- @param messages table|nil
+--- @return string
+function OutputManager:FormatMessagesForCopy(messages)
+    if not messages or #messages == 0 then
+        return "No messages found."
+    end
+
+    local lines = {}
+    for i = 1, #messages do
+        local msg = messages[i]
+        if msg and msg.message and not IsReloadSeparator(msg.message) then
+            local timestamp = msg.datetime or ""
+            local countSuffix = ""
+            if msg.count and msg.count > 1 then
+                countSuffix = " (x" .. msg.count .. ")"
+            end
+            lines[#lines + 1] = timestamp .. " " .. msg.message .. countSuffix
+        end
+    end
+
+    if #lines == 0 then
+        return "No messages found."
+    end
+
+    return table.concat(lines, "\n")
+end
+
 --- Get messages from current session for copying
 --- Formatted with just timestamp and message, no addon/channel
 --- @return string Formatted text ready for copying
@@ -350,28 +449,15 @@ function OutputManager:GetMessagesForCopy()
         end
     end
 
-    -- Build formatted output
-    local lines = {}
+    local exportMessages = {}
     for i = startIndex, endIndex do
         local msg = messages[i]
-        if msg and msg.message then
-            -- Skip reload separators in output
-            if not IsReloadSeparator(msg.message) then
-                local timestamp = msg.datetime or ""
-                local countSuffix = ""
-                if msg.count and msg.count > 1 then
-                    countSuffix = " (x" .. msg.count .. ")"
-                end
-                lines[#lines + 1] = timestamp .. " " .. msg.message .. countSuffix
-            end
+        if msg then
+            exportMessages[#exportMessages + 1] = msg
         end
     end
 
-    if #lines == 0 then
-        return "No messages found."
-    end
-
-    return table.concat(lines, "\n")
+    return self:FormatMessagesForCopy(exportMessages)
 end
 
 --- Update the in-memory message cap and trim existing messages if needed

@@ -5,10 +5,13 @@
 
 local _, MedaDebug = ...
 local MedaUI = LibStub("MedaUI-2.0")
+local C_Timer = C_Timer
+local InCombatLockdown = InCombatLockdown
 
 local MessagesTab = {}
 MedaDebug.MessagesTab = MessagesTab
 local DEFAULT_ADDON_COLOR = { 0.6, 0.8, 1 }
+local COMBAT_REFRESH_DELAY = 0.12
 
 MessagesTab.frame = nil
 MessagesTab.scrollList = nil
@@ -16,6 +19,9 @@ MessagesTab.currentFilter = "all"
 MessagesTab.searchText = ""
 MessagesTab.searchLower = nil
 MessagesTab.viewData = nil
+MessagesTab.pendingRefresh = false
+MessagesTab.pendingScrollToTop = false
+MessagesTab.refreshScheduled = false
 
 local function SetFontStringText(fontString, text)
     text = text or ""
@@ -64,6 +70,44 @@ function MessagesTab:FindVisibleRow(entry)
     end
 
     return nil
+end
+
+function MessagesTab:IsCombatThrottled()
+    return InCombatLockdown and InCombatLockdown()
+end
+
+function MessagesTab:FlushPendingRefresh()
+    self.refreshScheduled = false
+
+    if not self.pendingRefresh then
+        return
+    end
+
+    local shouldScrollToTop = self.pendingScrollToTop
+    self.pendingRefresh = false
+    self.pendingScrollToTop = false
+
+    self:RefreshData(shouldScrollToTop)
+end
+
+function MessagesTab:ScheduleRefresh(scrollToTop)
+    self.pendingRefresh = true
+    if scrollToTop then
+        self.pendingScrollToTop = true
+    end
+
+    if self.refreshScheduled then
+        return
+    end
+
+    self.refreshScheduled = true
+    if C_Timer and C_Timer.After then
+        C_Timer.After(COMBAT_REFRESH_DELAY, function()
+            self:FlushPendingRefresh()
+        end)
+    else
+        self:FlushPendingRefresh()
+    end
 end
 
 function MessagesTab:Initialize(parent)
@@ -167,7 +211,7 @@ function MessagesTab:RenderRow(row, data, index)
     SetFontStringText(row.count, data.countText or "")
 end
 
-function MessagesTab:RefreshData()
+function MessagesTab:RefreshData(scrollToTop)
     if not self.scrollList or not MedaDebug.OutputManager then return end
     local profile = MedaDebug.ProfilerLite and MedaDebug.ProfilerLite:BeginSample("Messages.RefreshData", "ui", "MessagesTab")
 
@@ -190,7 +234,11 @@ function MessagesTab:RefreshData()
     self.scrollList:SetData(self.viewData)
 
     -- Auto-scroll to top (newest) if enabled
-    if MedaDebug.db and MedaDebug.db.options.autoScroll then
+    if scrollToTop == nil then
+        scrollToTop = MedaDebug.db and MedaDebug.db.options.autoScroll
+    end
+
+    if scrollToTop then
         self.scrollList:ScrollToTop()
     end
 
@@ -203,6 +251,11 @@ function MessagesTab:OnNewMessage(entry, isUpdate)
     if not entry then
         -- Clear signal
         self:RefreshData()
+        return
+    end
+
+    if self:IsCombatThrottled() then
+        self:ScheduleRefresh(MedaDebug.db and MedaDebug.db.options.autoScroll)
         return
     end
 

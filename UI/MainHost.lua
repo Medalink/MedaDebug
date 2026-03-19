@@ -18,6 +18,7 @@ MainHost.currentFilter = "all"
 MainHost.searchText = ""
 MainHost.pageFilters = nil
 MainHost.knownMessageFilters = {}
+MainHost.knownMessageFilterLabels = {}
 MainHost.pageToolbars = nil
 
 local TOOLBAR_WIDTH = 680
@@ -53,6 +54,27 @@ local function EnsurePageFilters(frameState)
     end
 
     return pageFilters
+end
+
+local function BuildFilterLabel(filterValue)
+    if type(filterValue) ~= "string" or filterValue == "" or filterValue == "all" then
+        return "All Sources"
+    end
+
+    local addonName, sourceKind, sourceId = filterValue:match("^source:([^:]+):([^:]+):(.+)$")
+    if addonName and sourceKind and sourceId then
+        if sourceKind == "service" then
+            return addonName .. " / Service: " .. sourceId
+        elseif sourceKind == "core" then
+            return addonName .. " / Core: " .. sourceId
+        elseif sourceKind == "custom" then
+            return addonName .. " / Custom: " .. sourceId
+        end
+
+        return addonName .. " / " .. sourceId
+    end
+
+    return filterValue
 end
 
 local function SaveWindowState(state)
@@ -298,8 +320,10 @@ function MainHost:RefreshFilterDropdown()
     if self.activeTab == "messages" and MedaDebug.OutputManager and MedaDebug.OutputManager.GetMessageFilterOptions then
         options = MedaDebug.OutputManager:GetMessageFilterOptions()
         wipe(self.knownMessageFilters)
+        self.knownMessageFilterLabels = self.knownMessageFilterLabels or {}
         for i = 1, #options do
             self.knownMessageFilters[options[i].value] = true
+            self.knownMessageFilterLabels[options[i].value] = options[i].label
         end
     else
         options = {
@@ -328,13 +352,20 @@ function MainHost:RefreshFilterDropdown()
         end
     end
     if not hasSelected then
-        selected = "all"
-        self:SetFilterForPage(self.activeTab, selected)
-        self.currentFilter = selected
+        if self.activeTab == "messages" and selected ~= "all" then
+            options[#options + 1] = {
+                value = selected,
+                label = self.knownMessageFilterLabels[selected] or BuildFilterLabel(selected),
+            }
+        else
+            selected = "all"
+            self:SetFilterForPage(self.activeTab, selected)
+            self.currentFilter = selected
 
-        local module = self:GetActiveModule()
-        if module and module.OnFilterChanged then
-            module:OnFilterChanged(selected)
+            local module = self:GetActiveModule()
+            if module and module.OnFilterChanged then
+                module:OnFilterChanged(selected)
+            end
         end
     end
 

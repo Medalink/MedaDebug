@@ -20,6 +20,54 @@ local LEVEL_COLORS = {
     ERROR = {1, 0.3, 0.3},
 }
 
+local function NormalizeSourceInfo(addonName, sourceInfo)
+    if type(sourceInfo) ~= "table" then
+        return nil
+    end
+
+    local sourceKind = sourceInfo.kind
+    local sourceName = sourceInfo.name
+    if type(sourceKind) ~= "string" or sourceKind == "" or type(sourceName) ~= "string" or sourceName == "" then
+        return nil
+    end
+
+    local sourceId = sourceInfo.id
+    if type(sourceId) ~= "string" or sourceId == "" then
+        sourceId = sourceName
+    end
+
+    local label = sourceInfo.label
+    if type(label) ~= "string" or label == "" then
+        if sourceKind == "service" then
+            label = addonName .. " / Service: " .. sourceName
+        elseif sourceKind == "core" then
+            label = addonName .. " / Core: " .. sourceName
+        elseif sourceKind == "custom" then
+            label = addonName .. " / Custom: " .. sourceName
+        else
+            label = addonName .. " / " .. sourceName
+        end
+    end
+
+    local filter = sourceInfo.filter
+    if type(filter) ~= "string" or filter == "" then
+        filter = table.concat({
+            "source",
+            addonName,
+            sourceKind,
+            sourceId,
+        }, ":")
+    end
+
+    return {
+        kind = sourceKind,
+        name = sourceName,
+        relativePath = sourceInfo.relativePath,
+        label = label,
+        filter = filter,
+    }
+end
+
 local function BuildSourceInfo(addonName)
     if type(addonName) ~= "string" or addonName == "" or not debugstack then
         return nil
@@ -135,9 +183,9 @@ function MedaDebug:GetRegisteredAddons()
 end
 
 -- Internal output function
-function API:Output(addonName, message, level)
+function API:Output(addonName, message, level, sourceInfo)
     level = level or "INFO"
-    local sourceInfo = BuildSourceInfo(addonName)
+    sourceInfo = NormalizeSourceInfo(addonName, sourceInfo) or BuildSourceInfo(addonName)
     
     -- Create entry
     local entry = {
@@ -173,29 +221,29 @@ end
 --- Print a standard message
 --- @param addonName string The source addon name
 --- @param message string The message to print
-function MedaDebug:Print(addonName, message)
-    return API:Output(addonName, message, "INFO")
+function MedaDebug:Print(addonName, message, sourceInfo)
+    return API:Output(addonName, message, "INFO", sourceInfo)
 end
 
 --- Print a debug message
 --- @param addonName string The source addon name
 --- @param message string The message to print
-function MedaDebug:DebugMsg(addonName, message)
-    return API:Output(addonName, message, "DEBUG")
+function MedaDebug:DebugMsg(addonName, message, sourceInfo)
+    return API:Output(addonName, message, "DEBUG", sourceInfo)
 end
 
 --- Print a warning message
 --- @param addonName string The source addon name
 --- @param message string The message to print
-function MedaDebug:Warn(addonName, message)
-    return API:Output(addonName, message, "WARN")
+function MedaDebug:Warn(addonName, message, sourceInfo)
+    return API:Output(addonName, message, "WARN", sourceInfo)
 end
 
 --- Print an error message
 --- @param addonName string The source addon name
 --- @param message string The message to print
-function MedaDebug:Error(addonName, message)
-    return API:Output(addonName, message, "ERROR")
+function MedaDebug:Error(addonName, message, sourceInfo)
+    return API:Output(addonName, message, "ERROR", sourceInfo)
 end
 
 --- Pretty-print a table
@@ -203,7 +251,7 @@ end
 --- @param tbl table The table to print
 --- @param name string|nil Optional name for the table
 --- @param maxDepth number|nil Maximum depth to print (default 3)
-function MedaDebug:Table(addonName, tbl, name, maxDepth)
+function MedaDebug:Table(addonName, tbl, name, maxDepth, sourceInfo)
     maxDepth = maxDepth or 3
     name = name or "table"
     
@@ -234,7 +282,7 @@ function MedaDebug:Table(addonName, tbl, name, maxDepth)
     end
     
     local output = name .. " = " .. serialize(tbl, 0, {})
-    return API:Output(addonName, output, "DEBUG")
+    return API:Output(addonName, output, "DEBUG", sourceInfo)
 end
 
 --- Quick log (auto-detects calling addon)

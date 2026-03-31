@@ -33,6 +33,7 @@ Core\SVDiff.lua
 Core\TimerTracker.lua
 Core\Commands.lua
 Core\SuiteSettings.lua
+Core\AddonLoggingSettings.lua
 Core\SettingsHost.lua
 
 # UI modules

@@ -11,6 +11,7 @@ local debugstack = debugstack
 
 -- Registered addons
 API.registeredAddons = {}
+API._loadedPersistedAddons = false
 
 -- Default colors for log levels
 local LEVEL_COLORS = {
@@ -139,21 +140,59 @@ local function BuildSourceInfo(addonName)
     return fallback
 end
 
+local function CopyAddonRegistrationForDB(entry, addonName)
+    return {
+        name = entry.name or addonName,
+        color = entry.color or { 0.6, 0.8, 1 },
+        prefix = entry.prefix or ("[" .. addonName .. "]"),
+        enabled = entry.enabled ~= false,
+    }
+end
+
+function API:EnsureRegisteredAddonsLoaded()
+    if self._loadedPersistedAddons then
+        return
+    end
+
+    self._loadedPersistedAddons = true
+
+    local stored = MedaDebug.db and MedaDebug.db.registeredAddons
+    if type(stored) ~= "table" then
+        return
+    end
+
+    for addonName, entry in pairs(stored) do
+        if self.registeredAddons[addonName] == nil and type(entry) == "table" then
+            self.registeredAddons[addonName] = {
+                name = entry.name or addonName,
+                color = entry.color or { 0.6, 0.8, 1 },
+                prefix = entry.prefix or ("[" .. addonName .. "]"),
+                enabled = entry.enabled ~= false,
+            }
+        end
+    end
+end
+
 --- Register an addon for debug output
 --- @param addonName string The addon name
 --- @param config table|nil Optional configuration {color, prefix}
 function MedaDebug:RegisterAddon(addonName, config)
     config = config or {}
+    API:EnsureRegisteredAddonsLoaded()
+
+    local existing = API.registeredAddons[addonName] or {}
     API.registeredAddons[addonName] = {
         name = addonName,
-        color = config.color or {0.6, 0.8, 1},
-        prefix = config.prefix or ("[" .. addonName .. "]"),
-        enabled = true,
+        color = config.color or existing.color or {0.6, 0.8, 1},
+        prefix = config.prefix or existing.prefix or ("[" .. addonName .. "]"),
+        enabled = config.enabled ~= false,
+        getLogPolicy = type(config.getLogPolicy) == "function" and config.getLogPolicy or existing.getLogPolicy,
+        setLogPolicy = type(config.setLogPolicy) == "function" and config.setLogPolicy or existing.setLogPolicy,
     }
-    
+
     -- Save to DB for persistence
     if self.db then
-        self.db.registeredAddons[addonName] = API.registeredAddons[addonName]
+        self.db.registeredAddons[addonName] = CopyAddonRegistrationForDB(API.registeredAddons[addonName], addonName)
     end
 end
 
@@ -161,6 +200,7 @@ end
 --- @param addonName string The addon name
 --- @return boolean Whether the addon is registered
 function MedaDebug:IsAddonRegistered(addonName)
+    API:EnsureRegisteredAddonsLoaded()
     return API.registeredAddons[addonName] ~= nil
 end
 
@@ -168,12 +208,14 @@ end
 --- @param addonName string The addon name
 --- @return table|nil Addon info
 function MedaDebug:GetAddonInfo(addonName)
+    API:EnsureRegisteredAddonsLoaded()
     return API.registeredAddons[addonName]
 end
 
 --- Get all registered addons
 --- @return table Array of addon names
 function MedaDebug:GetRegisteredAddons()
+    API:EnsureRegisteredAddonsLoaded()
     local addons = {}
     for name in pairs(API.registeredAddons) do
         addons[#addons + 1] = name

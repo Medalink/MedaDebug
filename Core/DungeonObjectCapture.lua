@@ -21,6 +21,10 @@ local eventFrame = CreateFrame("Frame")
 local OBJECT_TOOLTIP_TYPE = Enum and Enum.TooltipDataType and Enum.TooltipDataType.Object or 4
 local UNIT_TOOLTIP_TYPE = Enum and Enum.TooltipDataType and Enum.TooltipDataType.Unit or 2
 local CORPSE_TOOLTIP_TYPE = Enum and Enum.TooltipDataType and Enum.TooltipDataType.Corpse or 3
+local CAPTURE_INSTANCE_TYPES = {
+    party = true,
+    scenario = true,
+}
 
 local function GetOptions()
     return MedaDebug.db and MedaDebug.db.options or nil
@@ -211,7 +215,7 @@ end
 
 local function IsDungeonInstanceContext(context)
     return context
-        and context.instanceType == "party"
+        and CAPTURE_INSTANCE_TYPES[context.instanceType]
         and context.instanceID
         and context.instanceID > 0
 end

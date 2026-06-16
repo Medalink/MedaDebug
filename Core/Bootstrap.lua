@@ -6,7 +6,7 @@
 local addonName, MedaDebug = ...
 _G.MedaDebug = MedaDebug
 
-MedaDebug.version = "1.0.0"
+MedaDebug.version = "1.0.3"
 MedaDebug.addonName = addonName
 
 local DEFAULT_DB = {
